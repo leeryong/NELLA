@@ -26,7 +26,7 @@
 
 📺 시연 영상 (클릭하여 보기)
 
-<a href="https://www.youtube.com/">
+<a href="https://www.youtube.com/watch?v=NWvAksoe4dE">
   <img src="assets/main.png"
        alt="NELLA 시연 영상"
        width="90%"
