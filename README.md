@@ -79,7 +79,7 @@
 <tr>
 <td width="50%" align="center">
 
-### ⚙️ 복잡한 설정을 대신하는 에이전트
+### ⚙️ 모델 훈련을 알아서 하는 에이전트
 <img src="assets/img3.png" alt="Auto Tuning" width="400"/>
 
 <div align="left">
