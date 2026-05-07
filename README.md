@@ -24,7 +24,12 @@
 
 <div align="center">
 
-📺 시연 영상 (클릭하여 보기)
+<h3>
+  <a href="https://www.youtube.com/watch?v=NWvAksoe4dE" 
+     style="text-decoration: none; color: inherit;">
+    📺 시연 영상 (클릭하여 보기)
+  </a>
+</h3>
 
 <a href="https://www.youtube.com/watch?v=NWvAksoe4dE">
   <img src="assets/main.png"
