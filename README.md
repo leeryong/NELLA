@@ -126,6 +126,9 @@
 ---
 
 ## 👨‍💻 개발자 그룹
+
+KISTI **BLUESKY** 팀 — *Harmonizing Human and AI Collaboration* · [github.com/leeryong/KISTI_BLUESKY](https://github.com/leeryong/KISTI_BLUESKY)
+
 - 이용 (ryonglee@kisti.re.kr)
 - 장래영 (raezero@kisti.re.kr)
 - 구자현 (jahyeongu@kisti.re.kr)
