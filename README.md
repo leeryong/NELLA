@@ -1,5 +1,11 @@
 # NELLA
 
+<div align="right">
+
+**한국어** | [English](README.en.md)
+
+</div>
+
 <div align="center">
   <img src="assets/NELLA_Concept_Main.png" alt="NELLA Logo" width="800"/>
   <p>
