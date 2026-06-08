@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8010:8000"
+    # API 키 등 모든 설정은 NELLA UI 의 [설정] 화면에서 입력한다.
+    # backend 가 컨테이너 안의 /app/data/.env 에 저장하므로, ./data 볼륨이 영속화한다.
+    # 호스트에 .env 를 미리 만들 필요 없음 — `docker compose up` 만으로 기동.
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/llmops.db
+      # 컨테이너 안에서 torch / transformers 가 모든 GPU 를 사용하도록.
+      # CPU 만 쓰려면 NVIDIA_VISIBLE_DEVICES=void 로 덮어쓰면 된다.
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    # GPU 예약 (nvidia-container-toolkit 가 호스트에 설치돼 있어야 동작).
+    # GPU 가 없는 호스트에서는 이 deploy 블록이 무시돼 CPU 모드로 기동된다.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Optional: Redis for Celery (background tasks)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+
+  # Optional: Ollama for local LLM
+  # ollama:
+  #   image: ollama/ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   restart: unless-stopped
+
+volumes:
+  ollama_data:

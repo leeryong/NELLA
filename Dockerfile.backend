@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.6
+#
+# NELLA 백엔드 — GPU 런타임 이미지
+# backend/ 디렉터리 안에 이미 Cython 으로 컴파일된 .so 가 들어있어
+# 별도 컴파일 단계 없이 단일 스테이지로 끝납니다.
+#
+# 사용자 측 빌드: docker compose up -d --build
+#   - 첫 빌드 시 torch + transformers 등 ML 의존성 설치로 10~20 분 소요됩니다.
+#   - 같은 머신에서 두 번째 빌드부터는 layer 캐시 덕분에 수 초.
+
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+WORKDIR /app
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    # `.env` 를 영속 볼륨(data/) 안에 두어 UI 에서 변경한 API 키가 컨테이너 재시작 후에도 유지됨.
+    NELLA_ENV_FILE=/app/data/.env
+
+# Python 3.11 (backend/ 안의 .so 는 cpython-311-x86_64-linux-gnu 빌드라 버전·아키 정확히 일치 필요)
+#
+# 시스템 의존성:
+#   - liblzma5/liblzma-dev : Python `_lzma` 모듈 백엔드. 없으면 torchvision import 가 깨지고
+#       그 여파로 transformers `AutoProcessor` 가 로드 실패 → docling 이 죽는다 (docling#3179).
+#   - tesseract-ocr + 언어팩(kor/jpn/eng) : 이미지 기반 PDF OCR (pytesseract)
+#   - poppler-utils : pdf2image(convert_from_path) 가 내부적으로 pdftoppm 사용
+#   - default-jre  : opendataloader-pdf 는 Java 11+ CLI 래퍼라 JRE 필수 (기본 PDF 추출기)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates curl libgomp1 \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-distutils python3.11-venv \
+        liblzma-dev \
+        tesseract-ocr tesseract-ocr-kor tesseract-ocr-jpn tesseract-ocr-eng \
+        poppler-utils \
+        default-jre \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 - \
+ && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
+ && ln -sf /usr/bin/python3.11 /usr/local/bin/python3
+
+# CUDA 12.4 torch (transformers/trl 의 torch 의존성 해소 전에 먼저 박는다)
+#  - 베이스 이미지가 CUDA 12.4 라 cu124 휠이 정확히 맞는다.
+#  - torch>=2.6 필수: transformers 4.57 의 check_torch_load_is_safe() 가 .bin(torch.load)
+#    체크포인트 로드 시 torch>=2.6 을 강제한다 (CVE-2025-32434). 2.5 면 모델 검증/로드가 막힘.
+RUN python -m pip install \
+    --index-url https://download.pytorch.org/whl/cu124 \
+    torch==2.6.0 torchvision==0.21.0
+
+COPY requirements.txt /app/requirements.txt
+RUN python -m pip install -r /app/requirements.txt
+
+# 벤치마크 평가용 (requirements.txt 에 없음)
+RUN python -m pip install lm-eval==0.4.4
+
+# 컴파일된 백엔드 (.so 24개 + 유지된 라우터/스키마/엔트리 .py)
+COPY backend /app/backend
+
+# 런타임 데이터 디렉터리 (compose volume 으로 호스트에서 영속화)
+RUN mkdir -p /app/data/documents \
+            /app/data/extracted \
+            /app/data/training_data \
+            /app/data/test_data \
+            /app/data/models \
+            /app/data/logs \
+            /app/data/thumbnails \
+            /app/data/benchmark \
+            /app/data/model_validation \
+            /app/data/chroma \
+            /app/data/vectordb
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

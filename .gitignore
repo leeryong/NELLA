@@ -1,0 +1,85 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Cython build artifacts
+*.c
+*.cpp
+*.o
+*.obj
+*.pyd
+
+# Virtual envs
+venv/
+.venv/
+env/
+.env
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+data/
+backend/data/
+
+# Training artifacts
+*.jsonl
+*.npy
+*.npz
+*.pt
+*.bin
+*.safetensors
+models/
+checkpoints/
+wandb/
+runs/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Frontend build
+frontend/dist/
+frontend/build/
+
+# Secrets
+*.pem
+*.key
+secrets/
+credentials.json
+
+# scout 필수 참조 데이터는 포함 (위 *.npy / *.jsonl 무시 규칙의 예외)
+# 없으면 모델 검증이 "Reference TCM directory not found" 500 으로 죽는다.
+!backend/scout/nella_reference_tcm_10pct_25bins/
+!backend/scout/nella_reference_tcm_10pct_25bins/**
+!backend/scout/biomistral-7b_wo-healthsearch_qa_train_iter_sft_step1.jsonl
