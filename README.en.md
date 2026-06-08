@@ -48,6 +48,20 @@
 
 ---
 
+## 🛠️ Installation
+
+Everything needed to install NELLA is provided as Docker containers. With no separate Python or Node.js setup required, you can run NELLA right away with just a few commands as long as Docker is installed.
+
+```bash
+git clone https://github.com/leeryong/NELLA.git
+cd NELLA/nella_source
+docker compose up -d --build
+```
+
+The initial build takes 10–20 minutes to install dependencies. Once complete, open [http://localhost:3001](http://localhost:3001) to start using NELLA right away.
+
+---
+
 ## 🚀 Key Features
 
 - **Web UI–embedded NELLA agent**: Request model building, check progress, and give revision instructions via chat — all without leaving the workspace
