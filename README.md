@@ -1,241 +1,145 @@
-# LLMOps Platform
+# NELLA
 
-An agent-based LLMOps platform that allows non-experts to fine-tune LLMs using their documents.
-Inspired by karpathy/autoresearch for autonomous training optimization.
-
-## Features
-
-- **Document Processing**: PDF, DOCX, XLSX, PPTX, HWP support via MarkItDown
-- **Training Data Generation**: Automatic Q&A pairs and DPO preference pairs via LLM
-- **Model Registry**: Browse and download HuggingFace models (Qwen2.5, TinyLlama, Phi-3, Gemma, etc.)
-- **SFT Training**: Full, LoRA, and QLoRA fine-tuning using TRL
-- **DPO Training**: Direct Preference Optimization for alignment
-- **AutoResearch Agent**: Autonomous hyperparameter optimization (try N configs, pick best)
-- **Evaluation**: BLEU, ROUGE, perplexity, LLM-as-judge
-- **Chat Interface**: Test fine-tuned models via browser
-- **Real-time Monitoring**: WebSocket-based live training loss charts
-
-## 빠른 시작 — Docker Compose (권장)
-
-`docker compose up` 한 줄로 백엔드(Cython 컴파일된 GPU 이미지) + 프론트엔드(nginx) 가 함께 기동됩니다.
-
-### 사전 준비 (OS 별 1회만)
-
-#### Linux (Ubuntu / Debian 등 — 권장)
-1. NVIDIA 드라이버 설치 (`nvidia-smi` 가 동작해야 함)
-2. Docker Engine + Docker Compose v2 설치
-3. NVIDIA Container Toolkit 설치:
-   ```bash
-   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-   curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-     | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-     | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-   sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-   sudo nvidia-ctk runtime configure --runtime=docker
-   sudo systemctl restart docker
-   ```
-4. 동작 확인: `docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi`
-
-#### Windows 10/11 (WSL2)
-1. Windows 11 또는 최근 Windows 10 + WSL2 활성화
-2. NVIDIA Studio/Game Ready 드라이버 설치 (Windows 본체)
-3. Docker Desktop 설치 + Settings → Resources → WSL Integration 활성
-4. WSL2 안에서 위 Linux 동작 확인 명령 실행
-
-#### macOS
-NVIDIA GPU 패스스루는 Docker on macOS 에서 지원되지 않습니다.
-파인튜닝/로컬 추론은 **불가**하며, 외부 LLM API(OpenAI, Anthropic) 모드로만 사용 가능합니다.
-이 경우에도 모든 기능이 동작하는 것은 아니므로 Linux/WSL2 환경을 권장합니다.
-
-### 실행 (1 단계)
-
-```bash
-docker compose up -d --build
-```
-
-접속:
-- 프론트엔드: http://localhost:3001
-- 백엔드 API 문서: http://localhost:8010/docs
-
-### API 키 입력
-
-처음 접속한 뒤 **NELLA 우측 [설정] 화면**에서 본인 API 키를 입력하세요:
-- `OPENAI_API_KEY` 또는 `ANTHROPIC_API_KEY` (둘 중 하나는 필수)
-- `HF_TOKEN` (gated 모델 사용 시)
-
-입력한 키는 `./data/.env` (호스트 측 마운트된 영속 볼륨) 에 저장되어 컨테이너 재시작 후에도 유지됩니다.
-
-### 상태 확인 / 종료
-
-```bash
-docker compose ps                  # 컨테이너 상태
-docker compose logs -f backend     # 백엔드 로그 추적
-docker compose down                # 종료 (볼륨 보존)
-docker compose down -v             # 종료 + 데이터까지 삭제 (주의)
-```
-
-### 데이터 보존
-
-- 호스트의 `./data/` → 컨테이너 `/app/data/` 로 마운트되어 문서·데이터셋·학습 모델·로그가 영속 저장됩니다.
-- 이미지 재빌드해도 데이터는 안전합니다.
-
-### 자주 묻는 문제
-
-- **`could not select device driver "nvidia"` 에러** → NVIDIA Container Toolkit 미설치/미설정. 위 "사전 준비" 다시 확인.
-- **컨테이너는 뜨는데 GPU 미인식** → `docker compose exec backend nvidia-smi` 로 확인. 안 보이면 호스트 드라이버/툴킷 점검.
-- **모델 다운로드 실패** → `.env` 의 `HF_TOKEN` 누락. 일부 모델(Llama, Gemma 등)은 HuggingFace 사용 동의 + 토큰 필요.
-- **OpenAI/Anthropic 호출 실패** → `.env` 의 키 확인.
+<div align="center">
+  <img src="assets/NELLA_Concept_Main.png" alt="NELLA Logo" width="800"/>
+  <p>
+    <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg">
+    <img alt="Docker" src="https://img.shields.io/badge/docker-%230db7ed.svg?logo=docker&logoColor=white">
+    <img alt="Python" src="https://img.shields.io/badge/python-3.12+-3670A0?logo=python&logoColor=ffdd54">
+  </p>
+</div>
 
 ---
 
-## Pipeline Walkthrough
+## 🔎 개요
 
-### Step 1: Upload Document
-Upload PDF, DOCX, HWP, or other documents. The system automatically:
-- Converts HWP to PDF (via libreoffice)
-- Extracts text using Microsoft MarkItDown
-- Counts words and estimates pages
+### **NELLA (Nifty-Enhanced LLMOps Agent)**
 
-### Step 2: Generate Training Data
-Use the LLM to automatically generate Q&A pairs or DPO preference pairs from your document.
-- SFT format: instruction/output pairs for supervised fine-tuning
-- DPO format: prompt/chosen/rejected pairs for preference optimization
-- Custom upload: upload your own JSONL training data
+**문서만 주면, 알아서 모델을 만들어주는 Agentic LLMOps 에이전트**
 
-### Step 3: Download Model
-Browse curated models from HuggingFace:
-- **Tiny (<2B)**: Qwen2.5-0.5B, SmolLM2-360M, TinyLlama-1.1B
-- **Small (2-7B)**: Qwen2.5-3B, Phi-3-mini, Gemma-2-2B
-- **Medium (7-13B)**: Qwen2.5-7B, Mistral-7B
+- **대화형 모델 제작 환경**: 채팅으로 요청하면 NELLA 에이전트가 데이터 생성부터 모델 학습, 평가까지 전 과정을 자동 수행
+- **비전문가도 사용 가능**: 복잡한 설정 없이 자연어 지시만으로 도메인 특화 LLM 제작 가능
+- **Human-in-the-Loop 구조**: 에이전트가 계획을 제시하고 사용자가 승인하는 방식으로 자동화와 통제 가능성을 동시에 제공
+- **보안성과 활용성**: 기관 내부 문서 기반 맞춤형 LLM을 로컬 환경에서 구축 가능
 
-### Step 4: Train
-Configure and start training:
-- **SFT LoRA**: Most common, efficient, recommended
-- **SFT QLoRA**: For GPU memory-constrained environments
-- **DPO**: Align model with human preferences
-- **AutoResearch**: Let the system find the best hyperparameters automatically
+<div align="center">
 
-### Step 5: Evaluate
-Evaluate on held-out test data:
-- BLEU, ROUGE-1/2/L scores
-- Perplexity
-- Optional LLM-as-judge scoring
+<h3>
+  <a href="https://www.youtube.com/watch?v=NWvAksoe4dE" 
+     style="text-decoration: none; color: inherit;">
+    📺 시연 영상 (클릭하여 보기)
+  </a>
+</h3>
 
-### Step 6: Chat
-Test your fine-tuned model in the browser chat interface.
+<a href="https://www.youtube.com/watch?v=NWvAksoe4dE">
+  <img src="assets/main.png"
+       alt="NELLA 시연 영상"
+       width="90%"
+       style="border: 1.5px solid #333; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.25);" />
+</a>
 
-## Architecture
+</div>
 
-```
-llmops/
-├── backend/
-│   ├── main.py                 # FastAPI app
-│   ├── config.py               # Settings via env vars
-│   ├── database.py             # SQLAlchemy + SQLite
-│   ├── agents/
-│   │   ├── orchestrator.py     # Full pipeline coordinator
-│   │   ├── document_agent.py   # Document processing
-│   │   ├── data_gen_agent.py   # Training data generation
-│   │   ├── training_agent.py   # Training orchestration
-│   │   ├── eval_agent.py       # Evaluation
-│   │   └── autoresearch_agent.py  # Autonomous optimization
-│   ├── services/
-│   │   ├── document_processor.py  # MarkItDown + HWP
-│   │   ├── llm_service.py         # OpenAI/Claude/Ollama
-│   │   ├── hf_registry.py         # HuggingFace models
-│   │   ├── sft_trainer.py         # TRL SFT training
-│   │   ├── rl_trainer.py          # DPO/PPO training
-│   │   ├── evaluator.py           # BLEU/ROUGE/PPL
-│   │   └── inference.py           # Model inference
-│   ├── api/                    # FastAPI routers
-│   └── schemas/                # Pydantic models
-├── frontend/
-│   └── src/
-│       ├── pages/              # React pages
-│       ├── components/         # Reusable components
-│       └── services/api.ts     # API client
-├── data/
-│   ├── documents/              # Uploaded documents
-│   ├── extracted/              # Extracted text
-│   ├── training_data/          # Generated datasets
-│   └── models/                 # Downloaded models
-└── tests/
-    ├── integration_test.py     # Full pipeline test
-    ├── test_document_processing.py
-    ├── test_data_generation.py
-    └── test_training.py
-```
+---
 
-## AutoResearch Agent
+## 🚀 주요 기능
 
-The AutoResearch agent (inspired by karpathy/autoresearch) automatically finds the best training configuration:
+- **웹 UI 내장형 NELLA 에이전트**: 작업 화면을 벗어나지 않고 채팅으로 모델 제작 요청, 진행 확인, 수정 지시 가능
+- **자동 학습 데이터 생성**: 문서 내용 기반 SFT/DPO 학습 데이터를 자동 합성하고 목적에 맞는 데이터셋 생성
+- **데이터 품질 검증**: 중복, 품질 저하, 형식 오류 데이터를 검토하여 학습에 적합한 데이터셋으로 정제
+- **기반 모델 자동 추천**: 사용 목적, 데이터 규모, 로컬 자원 등 여러 조건을 고려해 적합한 기반 모델 추천 및 비교
+- **하이퍼파라미터 자동 조정**: LoRA/QLoRA, epoch, learning rate 등 설정을 학습 목적과 평가 결과에 맞게 자동 추천 및 조정
+- **자연어 기반 파이프라인 오케스트레이션**: 사용자의 목적을 분석해 9단계 LLMOps 파이프라인을 자동 계획하고 단계별 실행
 
-1. **Generate trial configs**: Default + variations (different LR, LoRA rank, batch size)
-2. **Run quick trials**: Train for N steps per config, record eval loss
-3. **Select best**: Pick config with lowest evaluation loss
-4. **Full training**: Train with best config for full epochs
+<table>
+<tr>
+<td width="50%" align="center">
 
-```python
-# Example: start AutoResearch via API
-POST /api/training/autoresearch
-{
-  "dataset_id": 1,
-  "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
-  "method": "lora",
-  "max_trials": 5,
-  "steps_per_trial": 50,
-  "final_epochs": 3
-}
-```
+### 💬 채팅으로 모델 제작을 맡기는 에이전트
+<img src="assets/img1.png" alt="Agent Chat" width="400"/>
 
-## Docker
+<div align="left">
+• 자연어 요청만으로 전체 파이프라인 자동 실행<br>
+• 작업 화면 내 채팅창에서 진행 확인 및 수정 지시 가능
+</div>
 
-```bash
-# Build and run everything
-docker-compose up --build
+</td>
+<td width="50%" align="center">
 
-# Backend only
-docker build -f Dockerfile.backend -t llmops-backend .
-docker run -p 8000:8000 -v ./data:/app/data llmops-backend
-```
+### 📄 문서에서 학습 데이터를 만드는 에이전트
+<img src="assets/img2.png" alt="Data Generation" width="400"/>
 
-## LLM Providers
+<div align="left">
+• PDF, DOCX, HWP 등 다양한 형식 자동 변환<br>
+• 문서 기반 데이터셋 자동 합성
+</div>
 
-Configure in `.env`:
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
 
-```bash
-# OpenAI (default)
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
+### ⚙️ 모델 훈련을 알아서 하는 에이전트
+<img src="assets/img3.png" alt="Auto Tuning" width="400"/>
 
-# Anthropic
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
+<div align="left">
+• 하이퍼파라미터 자동 설정 및 학습 방식 선택<br>
+• 평가 결과 기반 데이터 보강 및 재학습 자동 제안
+</div>
 
-# Local Ollama (no API key needed)
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-```
+</td>
+<td width="50%" align="center">
 
-## HWP File Support
+### ✅ 결과를 평가하고 개선하는 에이전트
+<img src="assets/img4.png" alt="Evaluation" width="400"/>
 
-To process Korean HWP files, install libreoffice:
-```bash
-# macOS
-brew install --cask libreoffice
+<div align="left">
+• BLEU, ROUGE, LLM Judge 등 다양한 평가 지표 지원<br>
+• 완성된 모델과 즉시 대화 테스트 가능
+</div>
 
-# Ubuntu
-sudo apt-get install libreoffice
+</td>
+</tr>
+</table>
 
-# Or use hwp2pdf
-pip install hwp2pdf
-```
+---
 
-## Requirements
+## 🗂️ 지원 파이프라인 단계
 
-- Python 3.10+
-- 8GB+ RAM (more for larger models)
-- GPU recommended for training (can use CPU for small models with max_steps)
-- For QLoRA: GPU with 8GB+ VRAM
-- For LoRA with 7B models: GPU with 16GB+ VRAM
+| 단계           | 설명                                       |
+| ------------ | ---------------------------------------- |
+| 1. 문서 업로드    | PDF, DOCX, HWP 등 입력 문서 분석 및 텍스트 추출       |
+| 2. 학습 데이터 생성 | 문서 기반 SFT/DPO 학습 데이터 자동 합성               |
+| 3. 데이터 검증    | 중복, 품질 저하, 형식 오류 데이터 정제                  |
+| 4. 기반 모델 선택  | 목적, 자원 기반 모델 추천 및 비교                     |
+| 5. 모델 검증     | 후보 모델 사전 성능 비교                           |
+| 6. 모델 훈련     | LoRA/QLoRA 기반 파인튜닝 자동 수행                 |
+| 7. 훈련 결과 확인  | 학습 곡선 및 손실 결과 시각화                        |
+| 8. 모델 평가     | BLEU, ROUGE, Perplexity, LLM Judge 기반 평가 |
+| 9. 대화 테스트    | 튜닝된 모델과 즉시 대화 테스트                        |
+
+---
+
+## 📞 문의
+- 이용 (ryonglee@kisti.re.kr)
+
+---
+
+## 👨‍💻 개발자 그룹
+
+KISTI **BLUESKY** 팀 — *Harmonizing Human and AI Collaboration* · [github.com/leeryong/KISTI_BLUESKY](https://github.com/leeryong/KISTI_BLUESKY)
+
+- 이용 (ryonglee@kisti.re.kr)
+- 장래영 (raezero@kisti.re.kr)
+- 구자현 (jahyeongu@kisti.re.kr)
+
+---
+
+## 📚 활용 공개 소스
+- [Ollama](https://github.com/ollama/ollama)
+- [Hugging Face Transformers](https://github.com/huggingface/transformers)
+- [PEFT](https://github.com/huggingface/peft)
+- [TRL](https://github.com/huggingface/trl)
+- [Docling](https://github.com/DS4SD/docling)
+- [ChromaDB](https://github.com/chroma-core/chroma)
+- [vLLM](https://github.com/vllm-project/vllm)
