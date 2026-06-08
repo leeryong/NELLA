@@ -7,7 +7,7 @@
 </div>
 
 <div align="center">
-  <img src="assets/NELLA_Concept_Main.png" alt="NELLA Logo" width="800"/>
+  <img src="assets/NELLA_Concept_Main_EN.png" alt="NELLA Logo" width="800"/>
   <p>
     <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg">
     <img alt="Docker" src="https://img.shields.io/badge/docker-%230db7ed.svg?logo=docker&logoColor=white">
