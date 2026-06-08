@@ -141,7 +141,7 @@ The initial build takes 10–20 minutes to install dependencies. Once complete, 
 ---
 
 ## 📞 Contact
-- Yong Lee (ryonglee@kisti.re.kr)
+- Ryong Lee (ryonglee@kisti.re.kr)
 
 ---
 
@@ -149,7 +149,7 @@ The initial build takes 10–20 minutes to install dependencies. Once complete, 
 
 KISTI **BLUESKY** Team — *Harmonizing Human and AI Collaboration* · [github.com/leeryong/KISTI_BLUESKY](https://github.com/leeryong/KISTI_BLUESKY)
 
-- Yong Lee (ryonglee@kisti.re.kr)
+- Ryong Lee (ryonglee@kisti.re.kr)
 - Raeyoung Jang (raezero@kisti.re.kr)
 - Jahyun Gu (jahyeongu@kisti.re.kr)
 
