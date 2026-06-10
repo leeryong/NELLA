@@ -46,6 +46,12 @@
 
 </div>
 
+  ## 🌐 NELLA 배포판 공개
+
+  연구·교육·업무 현장에서 누구나 받아 직접 사용할 수 있도록 **NELLA 배포판**을 공개했습니다.
+
+  ➡️ **[NELLA 배포판(nella_source) 바로가기](nella_source/)** — Docker만 설치돼 있으면 `docker compose up -d --build` 명령 몇 줄로 바로 실행 (아래 설치 방법 참고)
+
 ---
 
 ## 🛠️ 설치 방법
