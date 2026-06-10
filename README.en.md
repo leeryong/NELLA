@@ -46,6 +46,12 @@
 
 </div>
 
+  ## 🌐 NELLA Distribution Released
+
+  The **NELLA distribution** is now publicly available so anyone in research, education, or everyday work can download and use it directly.
+
+  ➡️ **[Go to the NELLA distribution (nella_source)](nella_source/)** — with Docker installed, a few commands like `docker compose up -d --build` run it right away (see Installation below)
+
 ---
 
 ## 🛠️ Installation
