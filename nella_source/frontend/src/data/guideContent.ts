@@ -1,0 +1,673 @@
+import { Compass, FileText, Sparkles, ShieldCheck, Boxes, FlaskConical, Play, Trophy, BarChart3, MessageSquare, type LucideIcon } from "lucide-react";
+
+import shotDashboard       from "../assets/Figures/Screenshots/00_dashboard.png";
+import shotDocuments       from "../assets/Figures/Screenshots/01_documents.png";
+import shotDataGeneration  from "../assets/Figures/Screenshots/02_data-generation.png";
+import shotDataValidation  from "../assets/Figures/Screenshots/03_data-validation.png";
+import shotModelSelection  from "../assets/Figures/Screenshots/04_model-selection.png";
+import shotModelValidation from "../assets/Figures/Screenshots/05_model-validation.png";
+import shotTraining        from "../assets/Figures/Screenshots/06_training.png";
+import shotTrainingResults from "../assets/Figures/Screenshots/07_training-results.png";
+import shotEvaluation      from "../assets/Figures/Screenshots/08_evaluation.png";
+import shotChat            from "../assets/Figures/Screenshots/09_chat.png";
+
+export type GuideSectionType = "list" | "tip" | "warn" | "flow";
+
+export interface GuideSection {
+  title: string;
+  type?: GuideSectionType;
+  items: string[];
+}
+
+export interface GuideTab {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  stepNum?: number;
+  pageLink?: string;
+  heading: string;
+  lead: string;
+  screenshot?: string;
+  sections: GuideSection[];
+}
+
+export const guideTabs: GuideTab[] = [
+  // ────────────────────────────────────────────────────────────────
+  // 시작하기
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "intro",
+    label: "시작하기",
+    icon: Compass,
+    heading: "NELLA에 오신 것을 환영합니다",
+    lead: "문서만 주면, 알아서 모델을 만들어 드려요. NELLA는 PDF·DOCX·HWP 문서에서 학습데이터를 생성하고, 모델을 파인튜닝·평가·배포할 수 있는 9단계 LLMOps 파이프라인입니다.",
+    screenshot: shotDashboard,
+    sections: [
+      {
+        title: "NELLA가 자동화하는 9단계",
+        type: "flow",
+        items: [
+          "<b>1. 문서 업로드</b> — PDF·DOCX·HWP에서 텍스트 추출",
+          "<b>2. 학습데이터 생성</b> — 문서로부터 QA·DPO 학습 데이터 자동 생성",
+          "<b>3. 데이터 검증</b> — 규칙·LLM 기반으로 품질 평가",
+          "<b>4. 기반모델 선택</b> — HuggingFace 모델 검색·다운로드",
+          "<b>5. 모델 검증</b> — Scout 기반으로 유망 모델 사전 예측",
+          "<b>6. 모델 훈련</b> — SFT·DPO·AutoResearch 파인튜닝",
+          "<b>7. 훈련결과</b> — LoRA 어댑터 병합·다운로드",
+          "<b>8. 모델 평가</b> — BLEU·ROUGE·벤치마크 지표 측정",
+          "<b>9. 대화 테스트</b> — 학습된 모델과 직접 대화",
+        ],
+      },
+      {
+        title: "시작 전에 준비해 두면 좋은 것",
+        type: "list",
+        items: [
+          "<b>LLM API 키</b> — 학습데이터 생성·평가에 사용 (OpenAI 또는 Anthropic). <code>.env</code> 또는 'LLM 설정' 페이지에서 등록",
+          "<b>HuggingFace 토큰</b> — Llama·Gemma 등 라이선스 동의 모델을 받을 때 필요. <code>HF_TOKEN=hf_...</code>",
+          "<b>GPU</b> — 파인튜닝·추론에 필수. 8GB VRAM부터 소형 모델 학습 가능, 13B급은 24GB 권장",
+        ],
+      },
+      {
+        title: "이 가이드 사용법",
+        type: "tip",
+        items: [
+          "좌측 탭을 눌러 각 단계로 이동하거나, 하단 '이전/다음' 버튼으로 순서대로 따라가세요",
+          "각 단계 마지막에 '이 페이지로 가기' 버튼이 있어 바로 작업을 시작할 수 있습니다",
+          "각 페이지 우측 상단의 '도움말' 버튼으로 짧은 페이지별 도움말을 다시 볼 수 있습니다",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 1단계 — 문서 업로드
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step1",
+    label: "1. 문서 업로드",
+    icon: FileText,
+    stepNum: 1,
+    pageLink: "/documents",
+    heading: "1단계 — 문서 업로드",
+    lead: "학습에 사용할 PDF·DOCX·HWP 문서를 업로드하여 텍스트를 추출합니다. 추출된 텍스트가 다음 단계의 원본이 됩니다.",
+    screenshot: shotDocuments,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "NELLA는 문서에서 학습데이터를 자동 생성하므로, <b>좋은 모델의 출발점은 좋은 문서</b>입니다",
+          "추출 품질이 떨어지면 이후 모든 단계의 결과 품질이 함께 떨어집니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 추출 방식 선택</b> — 상단 버튼에서 openDataLoader / MarkItDown / PyPDF / Docling 중 하나 선택",
+          "<b>② 옵션 체크</b> — 그림이 많은 문서라면 '이미지도 추출' 옵션 체크 (openDataLoader · Docling 지원)",
+          "<b>③ 파일 업로드</b> — 드래그&드롭하거나 클릭하여 PDF·DOCX·HWP 파일 선택 (여러 개 동시 가능)",
+          "<b>④ 진행 모니터링</b> — 하단 목록에서 실시간 진행률 확인. 완료된 문서는 '미리보기'로 추출 결과를 검토",
+          "<b>⑤ 필요 시 재추출</b> — 결과가 만족스럽지 않으면 다른 추출기로 '재추출' 가능",
+        ],
+      },
+      {
+        title: "추출 방식 4가지",
+        items: [
+          "<b>openDataLoader</b> (기본) — PDF·DOCX·HWP 통합 처리. 이미지 추출 지원",
+          "<b>MarkItDown</b> — 마크다운 변환에 최적화",
+          "<b>PyPDF</b> — PDF 전용 가벼운 추출기",
+          "<b>Docling</b> — GPU/MPS 가속. 표·이미지 인식이 뛰어남",
+        ],
+      },
+      {
+        title: "주의사항",
+        type: "warn",
+        items: [
+          "스캔된 이미지 PDF는 추출기에 따라 결과 품질이 크게 달라집니다 — 여러 추출기를 비교해 보세요",
+          "용량이 큰 문서(수십 MB 이상)는 처리 시간이 오래 걸릴 수 있습니다",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "최소 1개 이상의 문서가 '추출 완료' 상태가 되면 → <b>2단계 학습데이터 생성</b>으로 진행",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 2단계 — 학습데이터 생성
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step2",
+    label: "2. 학습데이터 생성",
+    icon: Sparkles,
+    stepNum: 2,
+    pageLink: "/data",
+    heading: "2단계 — 학습데이터 생성",
+    lead: "추출된 문서 또는 업로드한 JSONL을 기반으로 LLM이 학습용 질문-답변 데이터를 자동 생성합니다.",
+    screenshot: shotDataGeneration,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "모델 파인튜닝에는 <b>정제된 질문-답변 쌍</b>이 필요합니다",
+          "NELLA는 LLM(OpenAI · Anthropic · Ollama)으로 문서에서 자동으로 학습 데이터를 만들어 시간을 크게 절약합니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 데이터 소스 선택</b> — '문서 선택' 탭 또는 'JSONL 업로드' 탭",
+          "<b>② 데이터 유형 선택</b> — QA(SFT) · CoT · ToT · GoT · DPO 중 하나",
+          "<b>③ 생성 옵션 지정</b> — 생성 쌍 수, 훈련:테스트 분할 비율, 데이터셋 이름",
+          "<b>④ LLM 공급자 선택</b> — 기본값 · OpenAI · Anthropic · Ollama · Mock",
+          "<b>⑤ (선택) 프롬프트 편집</b> — 시스템/사용자 프롬프트를 직접 손봐 생성 스타일 제어",
+          "<b>⑥ '학습데이터 생성' 클릭</b> — 진행률이 실시간으로 표시되며 완료 후 미리보기로 샘플 확인",
+        ],
+      },
+      {
+        title: "데이터 유형 5가지",
+        items: [
+          "<b>QA (SFT)</b> — 일반 질문/답변 쌍. 가장 기본",
+          "<b>CoT</b> (Chain-of-Thought) — 단계별 추론 과정을 포함",
+          "<b>ToT</b> (Tree-of-Thought) — 분기 탐색형 추론",
+          "<b>GoT</b> (Graph-of-Thought) — 그래프 구조 추론",
+          "<b>DPO</b> — 선호/비선호 응답 쌍 (선호도 학습용)",
+        ],
+      },
+      {
+        title: "팁",
+        type: "tip",
+        items: [
+          "처음에는 적은 수(10~30개)로 먼저 생성해 품질을 확인한 뒤 늘려 가세요",
+          "비용이 걱정되면 LLM 공급자를 GPT-4o-mini 또는 Claude Haiku 같은 저가 모델로 설정",
+        ],
+      },
+      {
+        title: "주의사항",
+        type: "warn",
+        items: [
+          "LLM API 호출 비용이 발생합니다 — 생성 쌍 수에 비례합니다",
+          "원본 문서의 텍스트 품질이 낮으면 생성된 데이터 품질도 함께 낮아집니다",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "생성된 데이터셋이 보이면 → <b>3단계 데이터 검증</b>으로 진행하여 품질을 한 번 더 점검하세요",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 3단계 — 데이터 검증
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step3",
+    label: "3. 데이터 검증",
+    icon: ShieldCheck,
+    stepNum: 3,
+    pageLink: "/data-validation",
+    heading: "3단계 — 학습데이터 검증",
+    lead: "생성된 학습데이터를 규칙 기반 또는 LLM 기반으로 평가하여 저품질 샘플을 걸러냅니다.",
+    screenshot: shotDataValidation,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "자동 생성된 데이터는 품질 편차가 큽니다 — 학습 전에 솎아내야 모델 성능이 안정됩니다",
+          "검증을 통과한 데이터로 별도 데이터셋이 자동 생성되어 훈련 단계에서 곧바로 사용할 수 있습니다",
+        ],
+      },
+      {
+        title: "두 가지 검증 방식",
+        items: [
+          "<b>규칙 기반 검증</b> — 답변 길이, 중복, 저품질 항목을 자동 필터링. 빠르고 비용 부담 없음",
+          "<b>LLM 기반 검증</b> — LLM(OpenAI · Anthropic · Ollama)이 5개 기준으로 점수화. 정밀하지만 비용·시간 소요",
+        ],
+      },
+      {
+        title: "LLM 평가의 5개 기준",
+        items: [
+          "<b>정확성</b> · <b>관련성</b> · <b>명확성</b> · <b>완성도</b> · <b>다양성</b>",
+          "총점(10점 만점)과 기준별 점수가 레이더·막대 차트로 시각화됩니다",
+          "발견된 문제는 심각도(높음/중간/낮음)와 함께 표시됩니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 데이터 유형(QA/DPO)과 데이터셋 선택</b>",
+          "<b>② 평가 방식과 옵션 설정</b> — LLM 평가자 선택, 전체/대표 샘플 선택",
+          "<b>③ '평가 시작' 클릭</b> — 진행 중 '중단'으로 언제든 멈출 수 있음",
+          "<b>④ 결과 확인</b> — 보존률(%)과 기준별 점수, 문제점 목록 검토",
+        ],
+      },
+      {
+        title: "팁",
+        type: "tip",
+        items: [
+          "시간·비용이 걱정되면 '대표 데이터만 평가' 옵션으로 일부만 점수 매기기",
+          "규칙 기반으로 1차 정제 → LLM 기반으로 2차 정제하는 흐름도 효과적입니다",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "검증 데이터셋이 생성됐다면 → <b>4단계 기반모델 선택</b>으로 진행",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 4단계 — 기반모델 선택
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step4",
+    label: "4. 기반모델 선택",
+    icon: Boxes,
+    stepNum: 4,
+    pageLink: "/models",
+    heading: "4단계 — 기반모델 선택",
+    lead: "파인튜닝의 출발점이 될 사전학습 모델을 HuggingFace에서 검색·다운로드합니다.",
+    screenshot: shotModelSelection,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "처음부터 모델을 만드는 대신 <b>이미 똑똑한 사전학습 모델</b>을 출발점으로 삼습니다",
+          "기반모델 선택은 최종 품질에 가장 큰 영향을 미치는 결정 중 하나입니다",
+        ],
+      },
+      {
+        title: "두 가지 모델 소스",
+        items: [
+          "<b>큐레이션 모델</b> — NELLA가 사전 검증한 추천 목록. 크기·정렬 필터 제공",
+          "<b>HuggingFace 최신 모델</b> — Hub 전체에서 인기/좋아요/최신순 검색",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 탭 선택</b> — 큐레이션 또는 HuggingFace",
+          "<b>② 검색·필터링</b> — 크기(소형 &lt;2B / 중소형 2~7B / 중형 7~13B) 또는 정렬 옵션 활용",
+          "<b>③ Download 버튼 클릭</b> — 우측 하단 패널에서 진행률 실시간 표시",
+          "<b>④ 완료 후 자동 등록</b> — 상단 '내 모델' 목록에서 채팅 테스트·삭제 가능",
+        ],
+      },
+      {
+        title: "라이선스 동의가 필요한 모델",
+        type: "warn",
+        items: [
+          "<b>Llama, Gemma 계열</b>은 Meta·Google 라이선스에 먼저 동의해야 받을 수 있습니다",
+          "<code>.env</code> 파일에 <code>HF_TOKEN=hf_...</code>을 등록한 뒤 다운로드를 시도하세요",
+        ],
+      },
+      {
+        title: "어떤 모델을 골라야 할지 모르겠다면",
+        type: "tip",
+        items: [
+          "GPU VRAM이 8GB 이하라면 <b>1~2B</b> 크기부터 시작",
+          "품질이 더 중요하면 <b>3B 이상</b>으로 시도",
+          "여러 후보를 받아 둔 뒤 다음 단계 '모델 검증'에서 비교하는 것을 권장합니다",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "후보 모델 1개 이상 다운로드 완료 → <b>5단계 모델 검증</b> 또는 바로 <b>6단계 모델 훈련</b>으로 진행",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 5단계 — 모델 검증
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step5",
+    label: "5. 모델 검증",
+    icon: FlaskConical,
+    stepNum: 5,
+    pageLink: "/model-validation",
+    heading: "5단계 — 모델 검증 (Beta)",
+    lead: "Scout 기법으로 후보 모델의 내부 반응을 분석해, 실제 파인튜닝 없이 가장 유망한 모델을 사전에 예측·선정합니다.",
+    screenshot: shotModelValidation,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "여러 후보 모델을 모두 실제로 학습해 비교하면 GPU·시간 비용이 매우 큽니다",
+          "Scout는 <b>모델 내부 활성화 지표</b>로 학습 후 개선율을 미리 예측해 후보를 사전 선정합니다",
+        ],
+      },
+      {
+        title: "동작 원리",
+        items: [
+          "학습데이터의 일부(기본 10%)를 후보 모델에 입력해 추론 1회만 수행합니다 (실제 학습은 일어나지 않음)",
+          "각 transformer 레이어에서 <b>dispersion · attention_entropy · head_diversity</b> 지표를 추출",
+          "사용자 데이터셋을 6개 참조 데이터셋과 BGE-M3 임베딩 + Wasserstein 거리로 매칭",
+          "매칭된 참조의 RandomForest 회귀모델이 후보들의 <b>파인튜닝 개선율</b>을 예측",
+        ],
+      },
+      {
+        title: "예측 방식 두 가지",
+        items: [
+          "<b>방식 A — 최종 점수 기반</b>: 현재 점수 측정 + 개선율 예측으로 학습 후 예상 점수까지 산출. 정밀하지만 시간이 오래 걸립니다",
+          "<b>방식 B — 개선율 기반</b>: 개선율(%)만 예측. 빠릅니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 평가용 SFT 데이터셋 선택</b> — 다중 선택 시 자동 병합",
+          "<b>② 후보 모델 체크</b> — 다운로드된 모델 또는 HuggingFace ID 직접 추가",
+          "<b>③ 옵션 지정</b> — 평가 샘플 수(기본 10%), LLM 평가자(방식 A)",
+          "<b>④ '검증 시작' 클릭</b> — 모델별 순위표가 정리되어 표시됩니다",
+        ],
+      },
+      {
+        title: "결과 지표",
+        items: [
+          "<b>예측 개선율(%)</b> · <b>예상 최종 점수</b> · <b>LLM Judge 점수</b> · <b>권장도 배지(추천/보통/비추천)</b>",
+          "1순위 모델이 '최적 선택'으로 표시됩니다",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "최적 선택 모델이 결정되면 → <b>6단계 모델 훈련</b>에서 해당 모델로 파인튜닝 시작",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 6단계 — 모델 훈련
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step6",
+    label: "6. 모델 훈련",
+    icon: Play,
+    stepNum: 6,
+    pageLink: "/training",
+    heading: "6단계 — 모델 훈련",
+    lead: "선택한 기반모델과 학습데이터로 파인튜닝을 실행합니다. NELLA 파이프라인의 핵심 단계입니다.",
+    screenshot: shotTraining,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "여기서 비로소 <b>우리만의 맞춤형 모델</b>이 만들어집니다",
+          "수동 설정으로 세밀한 제어를 하거나, AutoResearch로 하이퍼파라미터를 자동 탐색할 수 있습니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 훈련 방식 선택</b> — 수동 설정 / AutoResearch",
+          "<b>② 훈련 도구 선택</b> — TRL · Axolotl · Unsloth",
+          "<b>③ 데이터셋과 기반모델 선택</b> — 데이터셋은 다중 선택 시 자동 병합",
+          "<b>④ 훈련 단계와 학습 방식 지정</b> — SFT/DPO + LoRA/QLoRA/Full",
+          "<b>⑤ 하이퍼파라미터 설정</b> — 에폭, 학습률, 배치 크기 등",
+          "<b>⑥ '훈련 시작' 또는 'AutoResearch 시작'</b> — loss 곡선·로그 실시간 모니터링",
+        ],
+      },
+      {
+        title: "훈련 도구 3종",
+        items: [
+          "<b>TRL</b> — HuggingFace 공식 라이브러리. 가장 안정적",
+          "<b>Axolotl</b> — YAML 설정 기반. 옵션이 다양",
+          "<b>Unsloth</b> — 2~4배 빠른 학습. 메모리 효율적",
+        ],
+      },
+      {
+        title: "학습 방식 3종",
+        items: [
+          "<b>LoRA</b> — 어댑터만 학습. 빠르고 메모리 효율적 (권장)",
+          "<b>QLoRA</b> — 4비트 양자화 + LoRA. 최소 VRAM 사용",
+          "<b>Full FT</b> — 전체 파라미터 학습. 큰 VRAM 필요",
+        ],
+      },
+      {
+        title: "AutoResearch",
+        items: [
+          "여러 하이퍼파라미터 조합을 자동 탐색해 최적 설정을 산출",
+          "최대 시도 횟수, 시도당 스텝, 최종 에폭을 지정",
+          "수동 튜닝 경험이 부족한 경우 권장",
+        ],
+      },
+      {
+        title: "주의사항",
+        type: "warn",
+        items: [
+          "GPU VRAM이 부족하면 OOM 오류로 학습이 실패합니다 — QLoRA 또는 작은 모델로 전환하세요",
+          "에폭 수가 너무 많으면 과적합이 발생할 수 있습니다 (보통 3~5 에폭으로 충분)",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "훈련이 '완료' 상태가 되면 → <b>7단계 훈련결과</b>에서 모델 관리·다운로드",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 7단계 — 훈련결과
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step7",
+    label: "7. 훈련결과",
+    icon: Trophy,
+    stepNum: 7,
+    pageLink: "/training-results",
+    heading: "7단계 — 훈련결과 보기",
+    lead: "완료된 훈련 작업의 메트릭과 산출물을 관리합니다. LoRA 어댑터 병합, 모델 다운로드, 채팅 테스트로 바로 연결됩니다.",
+    screenshot: shotTrainingResults,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "학습된 모델은 단순한 파일이 아니라 <b>지속적으로 관리해야 할 자산</b>입니다",
+          "어댑터 병합·다운로드·삭제 등 모델 라이프사이클을 한 곳에서 처리합니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 상태 필터로 작업 찾기</b> — 전체 · 완료 · 취소 · 실패",
+          "<b>② 카드 클릭</b>으로 상세 펼치기 — loss 곡선, 훈련 설정, 저장 경로 확인",
+          "<b>③ 필요한 작업 실행</b> — 다운로드 / 병합 / 채팅 테스트 / 삭제",
+        ],
+      },
+      {
+        title: "주요 작업 5가지",
+        items: [
+          "<b>모델/어댑터 다운로드</b> — LoRA 어댑터(가벼움) 또는 완성 모델 파일",
+          "<b>LoRA 병합</b> — 기반모델 + 어댑터를 단일 모델로 병합 (진행률 실시간 표시)",
+          "<b>LoRA 사용 가이드</b> — 외부에서 어댑터를 로드하는 Python 코드 샘플 제공",
+          "<b>채팅 테스트</b> — '대화 테스트' 페이지로 바로 이동",
+          "<b>삭제</b> — 불필요한 작업 정리",
+        ],
+      },
+      {
+        title: "확인 가능한 정보",
+        items: [
+          "최종/최적 손실값과 학습 곡선",
+          "훈련 설정 (에폭 · 학습률 · 배치 크기 · LoRA R/Alpha 등)",
+          "AutoResearch 시도별 결과 테이블 (trial별 loss · step · 소요 시간)",
+          "저장된 체크포인트 경로",
+        ],
+      },
+      {
+        title: "팁",
+        type: "tip",
+        items: [
+          "LoRA 어댑터는 보통 수십 MB로 가볍기 때문에 다운로드·공유가 용이합니다",
+          "외부 환경에서 사용하려면 '병합'으로 단일 모델 파일을 만든 뒤 배포하세요",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "객관적 점수를 확인하고 싶다면 → <b>8단계 모델 평가</b>",
+          "직접 대화해 보고 싶다면 → <b>9단계 대화 테스트</b>",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 8단계 — 모델 평가
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step8",
+    label: "8. 모델 평가",
+    icon: BarChart3,
+    stepNum: 8,
+    pageLink: "/evaluation",
+    heading: "8단계 — 모델 평가",
+    lead: "파인튜닝된 모델의 성능을 정량 지표(BLEU·ROUGE·Perplexity·LLM Judge)와 표준 벤치마크로 측정합니다.",
+    screenshot: shotEvaluation,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "주관적 인상만으로는 모델 간 우열을 판단하기 어렵습니다",
+          "객관적 점수가 있어야 학습 설정 개선 방향과 배포 가능 여부를 가릴 수 있습니다",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 탭 선택</b> — '기본 평가' 또는 '벤치마크 평가'",
+          "<b>② 모델·데이터셋·옵션 선택</b> — 'LLM 심사' 옵션을 켜면 답변 품질을 LLM이 추가 채점",
+          "<b>③ '평가 시작' 클릭</b> — 진행률 실시간 표시, '중지' 가능",
+          "<b>④ 결과 확인</b> — 점수와 답변 샘플 채점 결과를 함께 검토",
+        ],
+      },
+      {
+        title: "기본 평가 지표",
+        items: [
+          "<b>BLEU</b> — 정답과 모델 출력의 n-gram 일치도",
+          "<b>ROUGE-1/2/L</b> — 정답 대비 모델 출력의 재현율 (요약 품질 평가에 사용)",
+          "<b>Perplexity</b> — 모델의 언어 예측 불확실성 (낮을수록 좋음)",
+          "<b>LLM Judge</b> — LLM이 응답 품질을 직접 채점",
+        ],
+      },
+      {
+        title: "벤치마크 평가",
+        items: [
+          "지원 벤치마크: <b>MMLU · ARC-Easy/Challenge · HellaSwag · TruthfulQA · GSM8K · WinoGrande · Ko-MMLU · KLUE</b>",
+          "여러 벤치마크를 다중 선택해 막대·레이더 차트로 결과 비교",
+        ],
+      },
+      {
+        title: "주의사항",
+        type: "warn",
+        items: [
+          "벤치마크 평가의 백엔드(lm-evaluation-harness) 연동은 현재 작업 중입니다",
+        ],
+      },
+      {
+        title: "팁",
+        type: "tip",
+        items: [
+          "여러 훈련 작업을 평가해 두면 어느 학습 설정이 더 좋았는지 한눈에 비교 가능",
+        ],
+      },
+      {
+        title: "다음 단계로 가려면",
+        type: "tip",
+        items: [
+          "실제 응답 품질·말투까지 확인하려면 → <b>9단계 대화 테스트</b>",
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────────
+  // 9단계 — 대화 테스트
+  // ────────────────────────────────────────────────────────────────
+  {
+    id: "step9",
+    label: "9. 대화 테스트",
+    icon: MessageSquare,
+    stepNum: 9,
+    pageLink: "/chat",
+    heading: "9단계 — 대화 테스트",
+    lead: "훈련된 로컬 모델 또는 외부 API 모델과 실시간으로 대화하며 응답 품질을 검증합니다. RAG(문서 검색 기반 응답)도 함께 활용할 수 있습니다.",
+    screenshot: shotChat,
+    sections: [
+      {
+        title: "왜 이 단계가 필요한가요?",
+        items: [
+          "BLEU·ROUGE 같은 점수만으로는 알기 어려운 <b>말투·문체·실제 답변 품질</b>을 직접 체감할 수 있습니다",
+          "기반모델과 파인튜닝 모델을 번갈아 호출해 학습 효과를 비교할 수 있습니다",
+        ],
+      },
+      {
+        title: "대화 방식 4가지",
+        items: [
+          "<b>로컬 모델</b> — 다운로드된 모델 또는 훈련 완료 모델 선택, 경로 직접 입력 가능",
+          "<b>OpenAI</b> — GPT-4o · GPT-4o-mini · GPT-4-turbo · GPT-3.5-turbo",
+          "<b>Anthropic</b> — Claude Sonnet · Haiku · Opus 계열",
+          "<b>Ollama</b> — 로컬 Ollama 서버를 통한 추론",
+        ],
+      },
+      {
+        title: "RAG 모드",
+        items: [
+          "토글을 켜면 업로드된 문서가 VectorDB에서 검색되어 응답 컨텍스트로 사용됩니다",
+          "사실 기반 질의에서 환각(hallucination)을 줄이는 데 효과적",
+        ],
+      },
+      {
+        title: "사용 순서",
+        type: "list",
+        items: [
+          "<b>① 대화 방식과 모델 선택</b> — 로컬 모델은 초기 로딩에 시간이 걸릴 수 있음",
+          "<b>② (선택) RAG 토글</b> — 사실 기반 응답이 필요한 경우 활성화",
+          "<b>③ '준비 완료' 상태 확인 후 메시지 입력</b>",
+          "<b>④ 응답 비교</b> — 기반모델 ↔ 파인튜닝 모델 교차 호출로 학습 효과 체감",
+        ],
+      },
+      {
+        title: "생성 옵션",
+        items: [
+          "<b>온도(Temperature)</b> — 높이면 다채롭고 낮추면 일관적이며 보수적",
+          "<b>최대 토큰 수</b> — 응답 길이의 상한",
+          "<b>시스템 프롬프트</b> — 모델 역할 지정",
+        ],
+      },
+      {
+        title: "마무리",
+        type: "tip",
+        items: [
+          "여기까지 오면 NELLA 파이프라인 한 사이클이 완료됩니다.",
+          "결과가 만족스럽지 않다면 데이터 검증·기반모델 선택·하이퍼파라미터를 바꿔 다시 시도해 보세요",
+        ],
+      },
+    ],
+  },
+];
