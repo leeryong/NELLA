@@ -49,6 +49,11 @@ logs/
 data/
 backend/data/
 
+# 프론트엔드 소스 코드인 data 디렉토리는 무시하면 안 됨 (위 data/ 규칙 예외)
+# 없으면 docker build 시 TS2307 "Cannot find module '../data/...'" 로 죽는다.
+!frontend/src/data/
+!frontend/src/data/**
+
 # Training artifacts
 *.jsonl
 *.npy
