@@ -21,10 +21,10 @@
 
 > ### 🌐 이제 **TAW**에서 에이전트로 만나요!
 >
-> **NELLA** — 이제 **[The Agents Web (TAW)](https://github.com/leeryong/The_Agents_Web_TAW)** 플랫폼에서 **에이전트**로 만날 수 있습니다!
+> **NELLA** — 이제 **[The Agents Web (TAW)](https://github.com/leeryong/The_Agents_Web_TAW/blob/main/README.ko.md)** 플랫폼에서 **에이전트**로 만날 수 있습니다!
 > 설치 없이 **TAW Browser** 하나로 **PC·모바일 어디서나**(Windows · macOS · Linux · iOS · Android), **대화로도 웹앱으로도** 바로 쓰세요.
 >
-> ➡️ **[The Agents Web (TAW)](https://github.com/leeryong/The_Agents_Web_TAW)** · 🌌 **[KISTI · BLUESKY](https://github.com/leeryong/KISTI_BLUESKY)**
+> ➡️ **[The Agents Web (TAW)](https://github.com/leeryong/The_Agents_Web_TAW/blob/main/README.ko.md)** · 🌌 **[KISTI · BLUESKY](https://github.com/leeryong/KISTI_BLUESKY)**
 
 
 ## 🔎 개요
