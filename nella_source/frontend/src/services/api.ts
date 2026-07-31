@@ -217,10 +217,6 @@ export const documentsApi = {
       { params: { max_chars: maxChars } }
     ),
 
-  reindexRag: (id: number) => api.post<{ status: string; doc_id: number; chunk_count: number }>(
-    `/documents/${id}/rag/reindex`
-  ),
-
   delete: (id: number) => api.delete(`/documents/${id}`),
 
   deleteAll: () => api.delete("/documents/all"),
@@ -681,6 +677,8 @@ export const chatApi = {
     max_new_tokens?: number;
     temperature?: number;
     use_rag?: boolean;
+    rag_collection_id?: number;        // legacy: single
+    rag_collection_ids?: number[];     // multi-select
     rag_document_ids?: number[];
     rag_top_k?: number;
   }) => api.post<{
@@ -691,6 +689,8 @@ export const chatApi = {
       chunk_index: number;
       score: number;
       content: string;
+      collection_id?: number;
+      collection_name?: string;
     }>;
   }>("/chat/complete", params),
 
@@ -732,6 +732,51 @@ export const chatApi = {
 };
 
 // Status API
+export interface RagCollectionDoc {
+  document_id: number;
+  filename: string;
+  chunk_count: number;
+  indexed_at: string | null;
+}
+
+export type RagCollectionStatus = "idle" | "pending" | "indexing" | "completed" | "failed";
+
+export interface RagCollection {
+  id: number;
+  name: string;
+  description: string;
+  chroma_name: string;
+  chunk_count: number;
+  embedding_model: string | null;
+  document_count: number;
+  documents: RagCollectionDoc[];
+  status: RagCollectionStatus;
+  progress_stage: string | null;
+  progress_current: number;
+  progress_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const ragDbApi = {
+  list: () => api.get<RagCollection[]>("/rag-db"),
+  get: (id: number) => api.get<RagCollection>(`/rag-db/${id}`),
+  create: (params: { name: string; description: string; document_ids: number[] }) =>
+    api.post<RagCollection>("/rag-db", params),
+  update: (id: number, params: { name?: string; description?: string; document_ids?: number[] }) =>
+    api.patch<RagCollection>(`/rag-db/${id}`, params),
+  reindex: (id: number) => api.post<RagCollection>(`/rag-db/${id}/reindex`),
+  delete: (id: number) => api.delete(`/rag-db/${id}`),
+  download: (id: number) => {
+    // 브라우저 네이티브 다운로드 (대용량 zip 스트리밍)
+    const url = `${BASE_URL}/rag-db/${id}/download`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.click();
+  },
+};
+
 export const settingsApi = {
   get: () => api.get("/settings"),
   update: (data: Record<string, unknown>) => api.patch("/settings", data),

@@ -50,17 +50,11 @@ class ScoutValidationRequest(BaseModel):
 
 
 async def _run_command(cmd: list[str], cwd: Path) -> str:
-    # Cython 컴파일된 scout 모듈을 `python -m backend.scout.X` 로 호출할 수 있도록
-    # PYTHONPATH 에 프로젝트 루트(BASE_DIR)를 끼워둔다. cwd 는 SCOUT_DIR 유지 →
-    # scout 스크립트 내부의 `./mmlu/...`, `./biomistral-...jsonl` 등 상대경로 호환.
-    existing_pp = os.environ.get("PYTHONPATH", "")
-    pythonpath = str(BASE_DIR) + (os.pathsep + existing_pp if existing_pp else "")
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd),
         env={
             **os.environ,
-            "PYTHONPATH": pythonpath,
             "OLAPH_JSONL": str(SCOUT_DIR / "biomistral-7b_wo-healthsearch_qa_train_iter_sft_step1.jsonl"),
         },
         stdout=asyncio.subprocess.PIPE,
@@ -247,7 +241,8 @@ async def run_scout_validation(
         )
         await _run_command(
             [
-                sys.executable, "-m", "backend.scout._run_extract",
+                sys.executable,
+                "_run_extract.py",
                 "--input-jsonl",
                 str(train_path),
                 "--target-name",
@@ -291,7 +286,8 @@ async def run_scout_validation(
     )
     await _run_command(
         [
-            sys.executable, "-m", "backend.scout._run_resample",
+            sys.executable,
+            "_run_resample.py",
             "--src-root",
             str(raw_dir),
             "--out-root",
@@ -314,7 +310,8 @@ async def run_scout_validation(
     )
     await _run_command(
         [
-            sys.executable, "-m", "backend.scout._run_prediction",
+            sys.executable,
+            "_run_prediction.py",
             "--target-jsonl",
             str(train_path),
             "--candidate-tcm-root",

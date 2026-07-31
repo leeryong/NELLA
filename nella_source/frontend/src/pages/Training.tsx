@@ -401,11 +401,15 @@ const Training: React.FC = () => {
           lastSeenRunningJobIdRef.current = running.id;
           return running;  // 새 훈련 등장 → 자동 전환
         }
+        // prev가 null이면 running으로 복원 (사용자가 닫았어도 다시 노출)
+        if (!prev) return running;
       }
       if (prev) return jobs.find((jj: TrainingJob) => jj.id === prev.id) ?? prev;
       return running ?? prev;
     });
     // Auto-show monitor for the LATEST running AutoResearch job — same logic.
+    // 아무 것도 선택돼 있지 않고 실행 중인 잡이 있으면 무조건 그걸 표시한다.
+    // (에이전트 도구 이벤트를 놓친 케이스에서도 폴링이 반드시 상황을 잡아냄)
     setSelectedArJob((prev) => {
       const running = arJobs.find((j: ARJob) => j.status === "running" || j.status === "pending");
       if (running) {
@@ -414,6 +418,8 @@ const Training: React.FC = () => {
           lastSeenRunningArJobIdRef.current = running.id;
           return running;  // 새 AR 훈련 등장 → 자동 전환
         }
+        // prev가 null(=사용자가 닫았거나 아직 뭐 선택 안 함)이면 running으로 복원
+        if (!prev) return running;
       }
       if (prev) return arJobs.find((j: ARJob) => j.id === prev.id) ?? prev;
       return running ?? prev;
@@ -715,6 +721,59 @@ const Training: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 진행 중인 훈련이 있으면 항상 표시 — selectedJob/selectedArJob 상태와 무관하게
+          "지금 무언가 돌고 있다"는 사실을 사용자에게 즉시 알려주는 배너.
+          클릭하면 해당 잡을 모니터로 강제 전환한다. */}
+      {(() => {
+        const runningAR = arJobs.filter((j) => j.status === "running" || j.status === "pending");
+        const runningSFT = jobs.filter((j) => j.status === "running" || j.status === "pending");
+        if (runningAR.length === 0 && runningSFT.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500" />
+              </span>
+              <p className="text-xs font-semibold text-indigo-800">
+                진행 중인 훈련 {runningAR.length + runningSFT.length}건
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {runningAR.map((j) => (
+                <button
+                  key={`ar-${j.id}`}
+                  onClick={() => { setSelectedArJob(j); setSelectedJob(null); }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    selectedArJob?.id === j.id
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-100"
+                  }`}
+                  title="클릭하면 이 AutoResearch 잡의 진행 화면으로 이동"
+                >
+                  🧪 AR #{j.id} {j.name}
+                  {j.best_loss != null && Number.isFinite(j.best_loss) ? ` · best ${j.best_loss.toFixed(3)}` : ""}
+                </button>
+              ))}
+              {runningSFT.map((j) => (
+                <button
+                  key={`sft-${j.id}`}
+                  onClick={() => { setSelectedJob(j); setSelectedArJob(null); }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                    selectedJob?.id === j.id
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-blue-700 border-blue-300 hover:bg-blue-100"
+                  }`}
+                  title="클릭하면 이 훈련 잡의 진행 화면으로 이동"
+                >
+                  🏋️ Job #{j.id} {j.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 모드 + 도구 선택 카드 ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">

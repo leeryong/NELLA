@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import nellaLogo from "./assets/Figures/NELLA_Assistant.png";
-import kistiBlueskyLogo from "./assets/Figures/KISTI_BLUESKY_LOGO.jpg";
 import { BrowserRouter, NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Database, Cpu, Play, BarChart3, MessageSquare, Settings, Menu, BrainCircuit, FlaskConical, ShieldCheck, Bot, Trophy, Zap, MemoryStick, Monitor } from "lucide-react";
+import { LayoutDashboard, FileText, Database, Cpu, Play, BarChart3, MessageSquare, Settings, Menu, BrainCircuit, FlaskConical, ShieldCheck, Bot, Trophy, Zap, MemoryStick, Monitor, Library, Sparkles, Github } from "lucide-react";
 import { api } from "./services/api";
 import Dashboard from "./pages/Dashboard";
 import Documents from "./pages/Documents";
@@ -13,30 +12,34 @@ import DataValidation from "./pages/DataValidation";
 import Training from "./pages/Training";
 import TrainingResults from "./pages/TrainingResults";
 import Evaluation from "./pages/Evaluation";
+import RagDb from "./pages/RagDb";
 import Chat from "./pages/Chat";
 import SettingsPage from "./pages/SettingsPage";
 import LLMSettings from "./pages/LLMSettings";
 import AgentChat from "./components/AgentChat";
+import LanguageSwitcher from "./components/LanguageSwitcher";
+import { useT } from "./i18n";
 
 const topItems = [
-  { to: "/", label: "대시보드", icon: LayoutDashboard },
+  { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
 ];
 
 const pipelineItems = [
-  { to: "/documents",        label: "문서 업로드",    icon: FileText,    step: 1 },
-  { to: "/data",             label: "학습데이터 생성", icon: Database,    step: 2 },
-  { to: "/data-validation",  label: "학습데이터 검증", icon: ShieldCheck, step: 3 },
-  { to: "/models",           label: "기반모델 선택",  icon: Cpu,         step: 4 },
-  { to: "/model-validation", label: "모델 검증",      icon: FlaskConical, step: 5 },
-  { to: "/training",         label: "모델 훈련",      icon: Play,        step: 6 },
-  { to: "/training-results", label: "훈련결과 보기",  icon: Trophy,      step: 7 },
-  { to: "/evaluation",       label: "모델 평가",      icon: BarChart3,   step: 8 },
-  { to: "/chat",             label: "대화 테스트",    icon: MessageSquare, step: 9 },
+  { to: "/documents",        labelKey: "step.1",  icon: FileText,    step: 1 },
+  { to: "/data",             labelKey: "step.2",  icon: Database,    step: 2 },
+  { to: "/data-validation",  labelKey: "step.3",  icon: ShieldCheck, step: 3 },
+  { to: "/models",           labelKey: "step.4",  icon: Cpu,         step: 4 },
+  { to: "/model-validation", labelKey: "step.5",  icon: FlaskConical, step: 5 },
+  { to: "/training",         labelKey: "step.6",  icon: Play,        step: 6 },
+  { to: "/training-results", labelKey: "step.7",  icon: Trophy,      step: 7 },
+  { to: "/evaluation",       labelKey: "step.8",  icon: BarChart3,   step: 8 },
+  { to: "/rag-db",           labelKey: "step.9",  icon: Library,     step: 9 },
+  { to: "/chat",             labelKey: "step.10", icon: MessageSquare, step: 10 },
 ];
 
 const utilItems = [
-  { to: "/llm-settings", label: "LLM 설정", icon: Bot },
-  { to: "/settings",     label: "설정",     icon: Settings },
+  { to: "/llm-settings", labelKey: "nav.llm_settings", icon: Bot },
+  { to: "/settings",     labelKey: "nav.settings",     icon: Settings },
 ];
 
 const pageRoutes = [
@@ -49,6 +52,7 @@ const pageRoutes = [
   { path: "/training",        component: <Training /> },
   { path: "/training-results",component: <TrainingResults /> },
   { path: "/evaluation",      component: <Evaluation /> },
+  { path: "/rag-db",          component: <RagDb /> },
   { path: "/chat",            component: <Chat /> },
   { path: "/settings",        component: <SettingsPage /> },
   { path: "/llm-settings",    component: <LLMSettings /> },
@@ -191,6 +195,7 @@ const AppInner: React.FC<{
   setAgentOpen: (v: boolean) => void;
 }> = ({ sidebarCollapsed, setSidebarCollapsed, agentOpen, setAgentOpen }) => {
   const location = useLocation();
+  const { t } = useT();
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -201,7 +206,7 @@ const AppInner: React.FC<{
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          title="사이드바 접기/펼치기"
+          title={t("header.sidebar_toggle")}
         >
           <Menu className="w-6 h-6 text-gray-500" />
         </button>
@@ -217,10 +222,13 @@ const AppInner: React.FC<{
 
         <div className="flex-1" />
 
+        {/* Language switcher */}
+        <LanguageSwitcher />
+
         {/* Agent panel toggle */}
         <button
           onClick={() => setAgentOpen(!agentOpen)}
-          title={agentOpen ? "어시스턴트 닫기" : "어시스턴트 열기"}
+          title={agentOpen ? t("header.assistant_close") : t("header.assistant_open")}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
             agentOpen
               ? "bg-blue-600 text-white hover:bg-blue-700"
@@ -228,7 +236,7 @@ const AppInner: React.FC<{
           }`}
         >
           <Bot className="w-5 h-5" />
-          <span className="hidden sm:block">NELLA 어시스턴트</span>
+          <span className="hidden sm:block">{t("header.assistant")}</span>
         </button>
       </header>
 
@@ -240,7 +248,9 @@ const AppInner: React.FC<{
           <nav className="flex-1 py-3 px-2 overflow-y-auto space-y-0.5">
 
             {/* 대시보드 */}
-            {topItems.map(({ to, label, icon: Icon }) => (
+            {topItems.map(({ to, labelKey, icon: Icon }) => {
+              const label = t(labelKey);
+              return (
               <NavLink key={to} to={to} end
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-lg text-[15px] font-medium transition-colors ${
@@ -251,18 +261,21 @@ const AppInner: React.FC<{
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">{label}</span>}
               </NavLink>
-            ))}
+              );
+            })}
 
             {/* ── 파이프라인 구분선 ── */}
             <div className="border-t border-slate-300 mt-2 pt-2">
               {!sidebarCollapsed && (
-                <p className="px-3 pb-1.5 text-xs font-extrabold text-blue-600 tracking-wide">파이프라인</p>
+                <p className="px-3 pb-1.5 text-xs font-extrabold text-blue-600 tracking-wide">{t("nav.pipeline_heading")}</p>
               )}
             </div>
 
             {/* 파이프라인 단계 */}
             <div className={`${sidebarCollapsed ? "" : "bg-blue-50/60 rounded-lg py-1 border border-blue-100"} space-y-0`}>
-              {pipelineItems.map(({ to, label, icon: Icon, step }) => (
+              {pipelineItems.map(({ to, labelKey, icon: Icon, step }) => {
+                const label = t(labelKey);
+                return (
                 <NavLink key={to} to={to}
                   className={({ isActive }) =>
                     `flex items-center gap-2 px-3 py-2 rounded-lg text-[15px] font-medium transition-colors ${
@@ -284,14 +297,17 @@ const AppInner: React.FC<{
                       </>
                   }
                 </NavLink>
-              ))}
+                );
+              })}
             </div>
 
             {/* ── 유틸 구분선 (대화 테스트 ~ LLM 설정 사이) ── */}
             <div className="border-t border-slate-300 mt-2 pt-2" />
 
             {/* LLM 설정 / 설정 */}
-            {utilItems.map(({ to, label, icon: Icon }) => (
+            {utilItems.map(({ to, labelKey, icon: Icon }) => {
+              const label = t(labelKey);
+              return (
               <NavLink key={to} to={to}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-lg text-[15px] font-medium transition-colors ${
@@ -302,27 +318,14 @@ const AppInner: React.FC<{
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">{label}</span>}
               </NavLink>
-            ))}
+              );
+            })}
 
             {/* 시스템 상태 — 설정 아래 구분선과 함께 배치 */}
             <div className="mt-4 mx-1 border-t-2 border-slate-300 pt-3">
               <SidebarSysStatus collapsed={sidebarCollapsed} />
             </div>
           </nav>
-          {/* ── KISTI BLUESKY 외부 링크 (사이드바 하단 고정) ── */}
-          <a
-            href="https://github.com/leeryong/KISTI_BLUESKY"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="KISTI BLUESKY GitHub"
-            className={`flex items-center justify-center ${sidebarCollapsed ? "px-1" : "px-3"} py-2 border-t border-slate-200 hover:bg-slate-200 transition-colors`}
-          >
-            <img
-              src={kistiBlueskyLogo}
-              alt="KISTI BLUESKY"
-              className={`${sidebarCollapsed ? "h-6 w-6 object-contain" : "h-6 w-auto object-contain"}`}
-            />
-          </a>
         </aside>
 
         {/* Center: main page content */}
@@ -337,6 +340,23 @@ const AppInner: React.FC<{
         {/* Right: agent chat panel */}
         <AgentChat collapsed={!agentOpen} onToggle={() => setAgentOpen(!agentOpen)} />
       </div>
+
+      {/* ── 하단 푸터 (화면 전체 폭) ── */}
+      <footer className="flex-shrink-0 h-6 bg-white border-t border-gray-200 flex items-center justify-end px-4">
+        <a
+          href="https://github.com/leeryong/KISTI_BLUESKY"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="KISTI BLUESKY GitHub"
+          className="flex items-center gap-1.5 h-full opacity-80 hover:opacity-100 transition-opacity"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+          <span className="text-sm font-extrabold tracking-wide bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+            KISTI NTIS BLUESKY
+          </span>
+          <Github className="w-3.5 h-3.5 text-gray-400" />
+        </a>
+      </footer>
     </div>
   );
 };

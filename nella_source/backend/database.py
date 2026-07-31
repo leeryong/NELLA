@@ -244,6 +244,37 @@ class AgentChatMessage(Base):
     created_at = Column(DateTime, default=func.now())
 
 
+class RagCollection(Base):
+    __tablename__ = "rag_collections"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False, unique=True)
+    description = Column(Text, nullable=True, default="")
+    chroma_name = Column(String(200), nullable=False, unique=True)  # actual Chroma collection name
+    chunk_count = Column(Integer, default=0)
+    embedding_model = Column(String(200), nullable=True)
+    # Background indexing progress
+    status = Column(String(20), default="idle", nullable=False)  # idle|pending|indexing|completed|failed
+    progress_stage = Column(String(300), nullable=True)  # short current-activity label
+    progress_current = Column(Integer, default=0)
+    progress_total = Column(Integer, default=0)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    documents = relationship("RagCollectionDocument", back_populates="collection", cascade="all, delete-orphan")
+
+
+class RagCollectionDocument(Base):
+    __tablename__ = "rag_collection_documents"
+
+    collection_id = Column(Integer, ForeignKey("rag_collections.id", ondelete="CASCADE"), primary_key=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    chunk_count = Column(Integer, default=0)
+    indexed_at = Column(DateTime, nullable=True)
+
+    collection = relationship("RagCollection", back_populates="documents")
+
+
 # Database dependency
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
@@ -338,6 +369,25 @@ async def init_db():
         # ChromaDB로 이전: 기존 SQLite rag_chunks 테이블 제거 (벡터는 이제 Chroma에서만 관리)
         try:
             await conn.execute(__import__("sqlalchemy").text("DROP TABLE IF EXISTS rag_chunks"))
+        except Exception:
+            pass
+        # RagCollection 진행 상태 컬럼 (기존 DB에 없으면 추가)
+        for _ddl in (
+            "ALTER TABLE rag_collections ADD COLUMN status VARCHAR(20) DEFAULT 'idle' NOT NULL",
+            "ALTER TABLE rag_collections ADD COLUMN progress_stage VARCHAR(300)",
+            "ALTER TABLE rag_collections ADD COLUMN progress_current INTEGER DEFAULT 0",
+            "ALTER TABLE rag_collections ADD COLUMN progress_total INTEGER DEFAULT 0",
+        ):
+            try:
+                await conn.execute(__import__("sqlalchemy").text(_ddl))
+            except Exception:
+                pass
+        # 서버 재시작 시 'indexing/pending' 잡을 'failed'로 정리
+        try:
+            await conn.execute(__import__("sqlalchemy").text(
+                "UPDATE rag_collections SET status='failed', progress_stage='서버 재시작으로 중단됨' "
+                "WHERE status IN ('indexing', 'pending')"
+            ))
         except Exception:
             pass
         # 새 임베딩 모델(BGE-M3)로 재인덱싱 필요 — 모든 문서의 rag_indexed 플래그 리셋

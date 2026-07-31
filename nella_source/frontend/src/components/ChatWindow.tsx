@@ -9,6 +9,8 @@ interface RagSource {
   chunk_index: number;
   score: number;
   content: string;
+  collection_id?: number;
+  collection_name?: string;
 }
 
 interface Message {
@@ -45,6 +47,9 @@ const SourcesList: React.FC<{ sources: RagSource[] }> = ({ sources }) => {
                 )}
                 <FileText className="w-3 h-3 text-blue-500 flex-shrink-0" />
                 <span className="font-medium text-gray-700 truncate">{s.filename}</span>
+                {s.collection_name && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 flex-shrink-0">{s.collection_name}</span>
+                )}
                 <span className="text-gray-400">· chunk {s.chunk_index}</span>
                 <span className="ml-auto text-gray-500 tabular-nums">{s.score.toFixed(2)}</span>
               </button>
@@ -77,11 +82,17 @@ interface ChatWindowProps {
   systemPrompt?: string;
   injectDoc?: AttachedDocInfo | null; // document injected from parent panel
   ragEnabled?: boolean;
+  ragCollectionIds?: number[];
   ragTopK?: number;
   ragDefaultExtractor?: string;
   /** NELLA가 test_model_chat을 호출했을 때 그 Q&A를 메시지로 표시 */
   injectQA?: { question: string; answer: string; ts: number } | null;
   onInjectedQA?: () => void;
+  /** NELLA 실행 중 preparing 단계 — 질문만 먼저 유저 메시지로 삽입 */
+  pendingUserMessage?: { question: string; ts: number } | null;
+  onPendingUserApplied?: () => void;
+  /** NELLA 실행 중 generating 단계 — "응답 생성 중" 말풍선 표시 */
+  agentThinking?: boolean;
 }
 
 interface AttachedDoc {
@@ -100,10 +111,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   systemPrompt = "You are a helpful AI assistant.",
   injectDoc,
   ragEnabled = false,
+  ragCollectionIds = [],
   ragTopK = 4,
   ragDefaultExtractor = "openDataLoader",
   injectQA,
   onInjectedQA,
+  pendingUserMessage,
+  onPendingUserApplied,
+  agentThinking = false,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -112,7 +127,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // ── Document attachment state ──────────────────────────
   const [attachedDoc, setAttachedDoc] = useState<AttachedDoc | null>(null);
-  const [ragDocumentIds, setRagDocumentIds] = useState<number[]>([]);
   const [extractor, setExtractor] = useState(ragDefaultExtractor);
 
   // Sync doc injected from parent panel
@@ -123,19 +137,44 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setExtractor(ragDefaultExtractor);
   }, [ragDefaultExtractor]);
 
-  // NELLA test_model_chat 결과를 메시지로 주입
+  // NELLA test_model_chat 결과를 메시지로 주입.
+  // preparing 단계에서 이미 유저 메시지가 삽입돼 있으면 assistant 답변만 이어붙인다.
   const lastInjectedTsRef = useRef<number | null>(null);
   useEffect(() => {
     if (!injectQA || injectQA.ts === lastInjectedTsRef.current) return;
     lastInjectedTsRef.current = injectQA.ts;
     const now = new Date(injectQA.ts);
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: injectQA.question, timestamp: now },
-      { role: "assistant", content: injectQA.answer, timestamp: new Date(injectQA.ts + 1) },
-    ]);
+    setMessages((prev) => {
+      const lastUser = [...prev].reverse().find((m) => m.role === "user");
+      if (lastUser && lastUser.content === injectQA.question) {
+        // 이미 preparing 단계에서 유저 메시지가 들어감 → 답변만 추가
+        return [...prev, { role: "assistant", content: injectQA.answer, timestamp: now }];
+      }
+      return [
+        ...prev,
+        { role: "user", content: injectQA.question, timestamp: now },
+        { role: "assistant", content: injectQA.answer, timestamp: new Date(injectQA.ts + 1) },
+      ];
+    });
     onInjectedQA?.();
   }, [injectQA, onInjectedQA]);
+
+  // NELLA preparing 단계 — 질문만 유저 메시지로 미리 삽입
+  const lastPendingUserTsRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!pendingUserMessage) return;
+    if (pendingUserMessage.ts === lastPendingUserTsRef.current) return;
+    lastPendingUserTsRef.current = pendingUserMessage.ts;
+    setMessages((prev) => {
+      const lastUser = [...prev].reverse().find((m) => m.role === "user");
+      if (lastUser && lastUser.content === pendingUserMessage.question) return prev;
+      return [
+        ...prev,
+        { role: "user", content: pendingUserMessage.question, timestamp: new Date(pendingUserMessage.ts) },
+      ];
+    });
+    onPendingUserApplied?.();
+  }, [pendingUserMessage, onPendingUserApplied]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -173,20 +212,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       }
       if (doc.status !== "completed") throw new Error("문서 처리 시간 초과. 다시 시도해 주세요.");
 
-      if (ragEnabled) {
-        for (let i = 0; i < 20; i++) {
-          const res = await documentsApi.get(docId);
-          doc = res.data;
-          if (doc.rag_indexed) break;
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-      }
-
-      // 3. Fetch extracted text for prompt attachment mode. RAG mode keeps the
-      // document in VectorDB and only sends retrieved chunks at answer time.
-      const textRes = ragEnabled
-        ? { data: { text: "", truncated: false, total_chars: doc.word_count ?? 0 } }
-        : await documentsApi.getText(docId, 8000);
+      // 대화 창에서 첨부한 문서는 프롬프트에 붙여넣는 방식으로만 사용합니다.
+      // RAG 검색 대상은 'RAG DB 생성' 페이지에서 만든 컬렉션이 담당합니다.
+      const textRes = await documentsApi.getText(docId, 8000);
       setAttachedDoc({
         id: docId,
         name: file.name,
@@ -194,9 +222,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         truncated: textRes.data.truncated,
         totalChars: textRes.data.total_chars,
       });
-      if (ragEnabled) {
-        setRagDocumentIds((prev) => Array.from(new Set([...prev, docId])));
-      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "업로드 실패");
     } finally {
@@ -213,15 +238,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     let apiContent = userText;
     let attachmentName: string | undefined;
 
-    if (attachedDoc && !ragEnabled) {
+    if (attachedDoc) {
       attachmentName = attachedDoc.name;
       const truncNote = attachedDoc.truncated
         ? ` (처음 ${attachedDoc.text.length.toLocaleString()}자 / 전체 ${attachedDoc.totalChars.toLocaleString()}자)`
         : "";
       apiContent = `[첨부 문서: ${attachedDoc.name}${truncNote}]\n\n${attachedDoc.text}${userText ? `\n\n---\n\n${userText}` : ""}`;
-    } else if (attachedDoc && ragEnabled) {
-      attachmentName = attachedDoc.name;
-      apiContent = userText || `${attachedDoc.name} 문서를 근거로 요약해 주세요.`;
     }
 
     const userMessage: Message = {
@@ -252,10 +274,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         messages: apiMessages,
         max_new_tokens: 512,
         temperature: 0.7,
-        use_rag: ragEnabled,
-        rag_document_ids: ragEnabled
-          ? Array.from(new Set([...ragDocumentIds, ...(attachedDoc ? [attachedDoc.id] : [])]))
-          : [],
+        use_rag: ragEnabled && ragCollectionIds.length > 0,
+        rag_collection_ids: ragCollectionIds,
+        rag_document_ids: [],
         rag_top_k: ragTopK,
       });
 
@@ -288,7 +309,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     setError(null);
     setAttachedDoc(null);
     setUploadError(null);
-    setRagDocumentIds([]);
   };
 
   const canSend = !loading && (!!input.trim() || !!attachedDoc);
@@ -302,9 +322,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           <div>
             <p className="text-sm font-medium text-gray-800">{modelName}</p>
             <p className="text-xs text-gray-500 truncate max-w-xs">
-              {ragEnabled
-                ? `RAG ON · ${ragDocumentIds.length > 0 ? `${ragDocumentIds.length}개 첨부` : "전체 인덱스"}`
-                : modelPath}
+              {ragEnabled ? "RAG ON" : modelPath}
             </p>
           </div>
         </div>
@@ -376,6 +394,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         )}
 
+        {agentThinking && !loading && (
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 flex items-center gap-2">
+              <span className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "120ms" }} />
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "240ms" }} />
+              </span>
+              <span className="text-xs text-blue-600 font-medium">NELLA가 응답을 생성하고 있어요...</span>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="text-center">
             <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg inline-block">{error}</p>
@@ -391,7 +425,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           {uploading && (
               <div className="flex items-center gap-2 text-xs text-blue-600">
                 <Loader className="w-3 h-3 animate-spin" />
-              <span>{ragEnabled ? "문서 추출 및 VectorDB 인덱싱 중..." : "문서 처리 중..."}</span>
+              <span>문서 처리 중...</span>
               </div>
           )}
           {uploadError && (
@@ -415,10 +449,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                     ? `(${attachedDoc.text.length.toLocaleString()}자 / 전체 ${attachedDoc.totalChars.toLocaleString()}자)`
                     : `(${attachedDoc.totalChars.toLocaleString()}자)`}
                 </span>
-                {ragEnabled && (
-                  <span className="text-blue-600">· VectorDB 사용</span>
-                )}
-                {!ragEnabled && attachedDoc.truncated && (
+                {attachedDoc.truncated && (
                   <span className="text-yellow-600">· 일부만 첨부됨</span>
                 )}
               </div>

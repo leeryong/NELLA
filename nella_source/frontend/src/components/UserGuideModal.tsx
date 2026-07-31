@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { X, ChevronLeft, ChevronRight, Lightbulb, AlertTriangle, ListOrdered, GitBranch, ArrowRight } from "lucide-react";
-import { guideTabs, GuideSection } from "../data/guideContent";
+import { getGuideTabs, GuideSection } from "../data/guideContent";
+import { useT } from "../i18n";
 
 interface UserGuideModalProps {
   open: boolean;
@@ -17,6 +18,8 @@ const SECTION_STYLE: Record<NonNullable<GuideSection["type"]> | "default", { wra
 };
 
 export default function UserGuideModal({ open, onClose }: UserGuideModalProps) {
+  const { lang, t } = useT();
+  const guideTabs = useMemo(() => getGuideTabs(lang), [lang]);
   const [active, setActive] = useState(0);
 
   useEffect(() => {
@@ -28,10 +31,11 @@ export default function UserGuideModal({ open, onClose }: UserGuideModalProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, guideTabs.length]);
 
   if (!open) return null;
-  const tab = guideTabs[active];
+  const safeActive = Math.min(active, guideTabs.length - 1);
+  const tab = guideTabs[safeActive];
   const Icon = tab.icon;
 
   return (
@@ -50,14 +54,14 @@ export default function UserGuideModal({ open, onClose }: UserGuideModalProps) {
               <Lightbulb size={16} className="text-blue-600" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">NELLA 사용 가이드</h2>
-              <p className="text-xs text-gray-500">단계별로 따라가며 NELLA를 익혀 보세요</p>
+              <h2 className="text-base font-bold text-gray-900">{t("guide.title")}</h2>
+              <p className="text-xs text-gray-500">{t("guide.subtitle")}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="닫기 (Esc)"
+            title={t("guide.close_hint")}
           >
             <X size={18} />
           </button>
@@ -145,16 +149,16 @@ export default function UserGuideModal({ open, onClose }: UserGuideModalProps) {
         <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 flex-shrink-0 bg-gray-50/60">
           <button
             onClick={() => setActive((i) => Math.max(i - 1, 0))}
-            disabled={active === 0}
+            disabled={safeActive === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
           >
             <ChevronLeft size={15} />
-            이전
+            {t("guide.prev")}
           </button>
 
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 font-medium">
-              {active + 1} / {guideTabs.length}
+              {safeActive + 1} / {guideTabs.length}
             </span>
             {tab.pageLink && (
               <Link
@@ -162,7 +166,7 @@ export default function UserGuideModal({ open, onClose }: UserGuideModalProps) {
                 onClick={onClose}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
               >
-                이 페이지로 가기
+                {t("guide.go_to_page")}
                 <ArrowRight size={13} />
               </Link>
             )}
@@ -170,10 +174,10 @@ export default function UserGuideModal({ open, onClose }: UserGuideModalProps) {
 
           <button
             onClick={() => setActive((i) => Math.min(i + 1, guideTabs.length - 1))}
-            disabled={active === guideTabs.length - 1}
+            disabled={safeActive === guideTabs.length - 1}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
           >
-            다음
+            {t("guide.next")}
             <ChevronRight size={15} />
           </button>
         </div>

@@ -1,90 +1,18 @@
-# OS metadata
-.DS_Store
-Thumbs.db
-desktop.ini
-
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-.eggs/
-build/
-dist/
-.Python
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Cython build artifacts
-*.c
-*.cpp
-*.o
-*.obj
-*.pyd
-
-# Virtual envs
-venv/
+*.pyc
+*.pyo
 .venv/
-env/
+venv/
+# Env / secrets — never commit real keys
 .env
-.env.*
-!.env.example
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
-*.log
-logs/
-
-# Runtime data
-*.db
-*.sqlite
-*.sqlite3
+*.env.local
+# Runtime data (created at run time by the ./data volume)
 data/
-backend/data/
-
-# 프론트엔드 소스 코드인 data 디렉토리는 무시하면 안 됨 (위 data/ 규칙 예외)
-# 없으면 docker build 시 TS2307 "Cannot find module '../data/...'" 로 죽는다.
-!frontend/src/data/
-!frontend/src/data/**
-
-# Training artifacts
-*.jsonl
-*.npy
-*.npz
-*.pt
-*.bin
-*.safetensors
-models/
-checkpoints/
-wandb/
-runs/
-
-# Node
+# Node / frontend build output
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Frontend build
 frontend/dist/
-frontend/build/
-
-# Secrets
-*.pem
-*.key
-secrets/
-credentials.json
-
-# scout 필수 참조 데이터는 포함 (위 *.npy / *.jsonl 무시 규칙의 예외)
-# 없으면 모델 검증이 "Reference TCM directory not found" 500 으로 죽는다.
-!backend/scout/nella_reference_tcm_10pct_25bins/
-!backend/scout/nella_reference_tcm_10pct_25bins/**
-!backend/scout/biomistral-7b_wo-healthsearch_qa_train_iter_sft_step1.jsonl
+# OS / editor
+.DS_Store
+*.log
+# NOTE: *.so and *.pyd are the obfuscated backend — they MUST be committed.

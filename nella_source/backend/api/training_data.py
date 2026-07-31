@@ -3,8 +3,6 @@ Training data management API endpoints.
 """
 import asyncio
 import json
-import math
-import random
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -652,246 +650,15 @@ def _strip_filter_suffix(name: str) -> str:
     return name
 
 
-def _extract_validation_item(row: dict, data_type: str) -> dict:
-    """Normalize SFT/DPO rows into a judgeable item."""
-    if data_type == "dpo":
-        question = row.get("prompt") or row.get("question") or row.get("instruction") or ""
-        answer = row.get("chosen") or ""
-        rejected = row.get("rejected") or ""
-        return {
-            "question": str(question),
-            "answer": str(answer),
-            "rejected": str(rejected),
-            "raw": row,
-        }
-
-    question = (
-        row.get("instruction")
-        or row.get("question")
-        or row.get("Human")
-        or row.get("prompt")
-        or ""
-    )
-    input_text = row.get("input") or row.get("context") or ""
-    if input_text:
-        question = f"{question}\n\nContext/Input: {input_text}"
-    answer = row.get("output") or row.get("answer") or row.get("Assistant") or row.get("response") or ""
-    return {"question": str(question), "answer": str(answer), "raw": row}
-
-
-def _choose_k_values(n_samples: int) -> list[int]:
-    if n_samples < 4:
-        return [2] if n_samples > 2 else [1]
-    max_k = min(int(math.sqrt(n_samples)), n_samples - 1, 30)
-    min_k = 2
-    if max_k <= min_k:
-        return [min_k]
-    step = max(1, (max_k - min_k) // 8)
-    return list(range(min_k, max_k + 1, step))
-
-
-def _build_embeddings(texts: list[str]):
-    """Prefer SentenceTransformer embeddings; fall back to TF-IDF vectors."""
-    try:
-        from sentence_transformers import SentenceTransformer
-
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        return model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
-    except Exception as e:
-        logger.warning(f"SentenceTransformer unavailable, using TF-IDF fallback: {e}")
-        from sklearn.feature_extraction.text import TfidfVectorizer
-
-        vectorizer = TfidfVectorizer(max_features=4096, ngram_range=(1, 2))
-        return vectorizer.fit_transform(texts).toarray()
-
-
-def _select_diverse_indices(embeddings, local_indices: list[int], quota: int, rng: random.Random) -> list[int]:
-    import numpy as np
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    if quota >= len(local_indices):
-        return local_indices
-
-    cluster_embeddings = embeddings[local_indices]
-    centroid = np.mean(cluster_embeddings, axis=0)
-    sims = cosine_similarity(cluster_embeddings, centroid.reshape(1, -1)).flatten()
-    selected_local = [int(np.argmax(sims))]
-
-    while len(selected_local) < quota:
-        remaining = [i for i in range(len(local_indices)) if i not in selected_local]
-        if not remaining:
-            break
-        selected_embeddings = cluster_embeddings[selected_local]
-        sim_to_selected = cosine_similarity(cluster_embeddings, selected_embeddings)
-        max_sim = np.max(sim_to_selected, axis=1)
-        dist = 1 - max_sim
-        for idx in selected_local:
-            dist[idx] = 0
-        remaining_dist = [max(float(dist[i]), 0.0) for i in remaining]
-        total = sum(remaining_dist)
-        if total <= 0:
-            selected_local.append(remaining[0])
-            continue
-        pick = rng.choices(remaining, weights=[d * d for d in remaining_dist], k=1)[0]
-        selected_local.append(pick)
-
-    return [local_indices[i] for i in selected_local]
-
-
-def _representative_sample_indices(items: list[dict], sample_count: int, random_state: int = 42) -> list[int]:
-    import numpy as np
-    from sklearn.cluster import KMeans
-    from sklearn.metrics import silhouette_score
-
-    n = len(items)
-    if n <= sample_count:
-        return list(range(n))
-    if n < 3:
-        return list(range(n))
-
-    texts = [f"{item.get('question', '')}\n{item.get('answer', '')}" for item in items]
-    embeddings = _build_embeddings(texts)
-
-    best_k = 2
-    best_score = -1.0
-    for k in _choose_k_values(n):
-        if k < 2 or k >= n:
-            continue
-        labels = KMeans(n_clusters=k, random_state=random_state, n_init="auto").fit_predict(embeddings)
-        try:
-            score = silhouette_score(embeddings, labels)
-        except Exception:
-            score = -1.0
-        if score > best_score:
-            best_score = score
-            best_k = k
-
-    labels = KMeans(n_clusters=best_k, random_state=random_state, n_init="auto").fit_predict(embeddings)
-    unique_labels, counts = np.unique(labels, return_counts=True)
-
-    quotas = {}
-    used = 0
-    for label, count in zip(unique_labels, counts):
-        quota = max(1, round((int(count) / n) * sample_count))
-        quotas[int(label)] = quota
-        used += quota
-    while used > sample_count:
-        largest = max(quotas, key=lambda k: quotas[k])
-        if quotas[largest] <= 1:
-            break
-        quotas[largest] -= 1
-        used -= 1
-    while used < sample_count:
-        largest = int(unique_labels[int(np.argmax(counts))])
-        quotas[largest] += 1
-        used += 1
-
-    rng = random.Random(random_state)
-    selected: list[int] = []
-    for label in unique_labels:
-        cluster_indices = np.where(labels == label)[0].tolist()
-        selected.extend(_select_diverse_indices(embeddings, cluster_indices, quotas[int(label)], rng))
-
-    return sorted(selected[:sample_count])
-
-
-async def _judge_training_sample(
-    svc: LLMService,
-    item: dict,
-    data_type: str,
-    active_criteria: list[str],
-) -> dict:
-    criteria_text = ", ".join(active_criteria)
-    # 응답을 한국어로 받기 위해 프롬프트도 한국어로 작성하고, issues는 짧고 직관적인 핵심만 1~2개로 제한한다.
-    if data_type == "dpo":
-        user_prompt = f"""다음 DPO 선호도 학습 샘플의 품질을 평가하세요.
-응답은 반드시 유효한 JSON만 출력하세요.
-
-평가 기준 (각 1~10점): {criteria_text}
-
-프롬프트:
-{item.get("question", "")}
-
-선호 응답(chosen):
-{item.get("answer", "")}
-
-거부 응답(rejected):
-{item.get("rejected", "")}
-
-JSON 스키마:
-{{
-  "scores": {{"accuracy": 1-10, "relevance": 1-10, "clarity": 1-10, "completeness": 1-10, "diversity": 1-10}},
-  "overall": 1-10,
-  "issues": [{{"text": "핵심만 30자 이내 한국어", "severity": "high|medium|low"}}]
-}}
-
-규칙:
-- issues는 가장 중요한 문제 1~2개만 (없으면 빈 배열).
-- issue.text는 반드시 한국어, 30자 이내, 명사형 핵심 문구 (예: "답변 길이 부족", "질문과 답변 불일치").
-- 영어 단어 사용 금지."""
-    else:
-        user_prompt = f"""다음 SFT 질문-답변 학습 샘플의 품질을 평가하세요.
-응답은 반드시 유효한 JSON만 출력하세요.
-
-평가 기준 (각 1~10점): {criteria_text}
-
-질문:
-{item.get("question", "")}
-
-답변:
-{item.get("answer", "")}
-
-JSON 스키마:
-{{
-  "scores": {{"accuracy": 1-10, "relevance": 1-10, "clarity": 1-10, "completeness": 1-10, "diversity": 1-10}},
-  "overall": 1-10,
-  "issues": [{{"text": "핵심만 30자 이내 한국어", "severity": "high|medium|low"}}]
-}}
-
-규칙:
-- issues는 가장 중요한 문제 1~2개만 (없으면 빈 배열).
-- issue.text는 반드시 한국어, 30자 이내, 명사형 핵심 문구 (예: "답변 길이 부족", "질문과 답변 불일치", "사실 오류 가능성").
-- 영어 단어 사용 금지."""
-
-    messages = [
-        {"role": "system", "content": "당신은 학습 데이터 품질을 엄격하게 평가하는 한국어 평가자입니다. JSON 외 어떤 설명도 출력하지 마세요. issue.text는 반드시 한국어로 작성하세요."},
-        {"role": "user", "content": user_prompt},
-    ]
-    try:
-        response = await svc.complete(messages, temperature=0.1, max_tokens=700)
-        start = response.find("{")
-        end = response.rfind("}") + 1
-        parsed = json.loads(response[start:end] if start >= 0 and end > start else response)
-    except Exception as e:
-        logger.warning(f"Dataset validation judge failed: {e}")
-        parsed = {"scores": {}, "overall": 5.0, "issues": [{"text": "LLM 평가 실패", "severity": "medium"}]}
-
-    scores = parsed.get("scores") or {}
-    clean_scores = {}
-    for criterion in active_criteria:
-        try:
-            clean_scores[criterion] = max(1.0, min(10.0, float(scores.get(criterion, parsed.get("overall", 5.0)))))
-        except Exception:
-            clean_scores[criterion] = 5.0
-    try:
-        overall = max(1.0, min(10.0, float(parsed.get("overall", sum(clean_scores.values()) / max(len(clean_scores), 1)))))
-    except Exception:
-        overall = sum(clean_scores.values()) / max(len(clean_scores), 1)
-
-    issues = []
-    for issue in parsed.get("issues") or []:
-        if isinstance(issue, dict) and issue.get("text"):
-            severity = issue.get("severity", "medium")
-            if severity not in ("high", "medium", "low"):
-                severity = "medium"
-            # 핵심만 보이도록 30자 이내로 잘라낸다.
-            text = str(issue["text"]).strip()
-            if len(text) > 30:
-                text = text[:30].rstrip() + "…"
-            issues.append({"text": text, "severity": severity})
-        if len(issues) >= 2:
-            break
-    return {"scores": clean_scores, "overall": overall, "issues": issues}
+# Quality-validation algorithms live in a plain (Cython-compilable) service
+# module; see backend/services/data_quality.py. Aliased to the historical
+# underscore names so the endpoint call sites below stay unchanged.
+from backend.services.data_quality import (
+    extract_validation_item as _extract_validation_item,
+    representative_sample_indices as _representative_sample_indices,
+    judge_training_sample as _judge_training_sample,
+    apply_quality_filters,
+)
 
 
 @router.post("/{dataset_id}/filter", response_model=DatasetResponse)
@@ -926,44 +693,16 @@ async def filter_dataset(
         return rows
 
     def apply_filters(rows: list, data_type: str) -> tuple[list, int]:
-        seen_keys: set = set()
-        kept = []
-        for idx, row in enumerate(rows):
-            if idx % 25 == 0:
-                _raise_if_validation_cancelled(dataset_id)
-            # Determine the relevant text fields
-            if data_type in ("sft", "sft_alpaca"):
-                text = row.get("output") or row.get("response") or ""
-                key = (row.get("instruction") or row.get("input") or "").strip()
-            else:  # dpo
-                text = row.get("chosen") or ""
-                key = (row.get("prompt") or "").strip()
-
-            # Length filter
-            if len(text) < req.min_length or len(text) > req.max_length:
-                continue
-
-            # Duplicate filter
-            if req.filter_duplicates:
-                if key and key in seen_keys:
-                    continue
-                if key:
-                    seen_keys.add(key)
-
-            # Low-quality heuristics
-            if req.filter_low_quality:
-                words = text.split()
-                if len(words) < 3:
-                    continue
-                # Answer is identical to question
-                if key and text.strip() == key.strip():
-                    continue
-                # Trivial answer (single token responses like "yes", "no", "ok")
-                if len(words) == 1:
-                    continue
-
-            kept.append(row)
-        return kept, len(rows) - len(kept)
+        # Rule-based quality filtering lives in the obfuscated service module.
+        return apply_quality_filters(
+            rows,
+            data_type,
+            min_length=req.min_length,
+            max_length=req.max_length,
+            filter_duplicates=req.filter_duplicates,
+            filter_low_quality=req.filter_low_quality,
+            cancel_check=lambda _idx: _raise_if_validation_cancelled(dataset_id),
+        )
 
     train_rows = read_jsonl(ds.train_path)
     test_rows = read_jsonl(ds.test_path) if ds.test_path else []
@@ -1064,11 +803,12 @@ async def validate_dataset(
         active_criteria = ["accuracy", "relevance", "clarity", "completeness", "diversity"]
 
     sample_count = max(1, min(int(req.sample_count or 30), len(items)))
+    cluster_labels = None  # per-item cluster label array; None disables cluster-level rejection
     if req.sample_method == "all":
         selected_indices = list(range(len(items)))
         sample_method = "all"
     else:
-        selected_indices = _representative_sample_indices(items, sample_count)
+        selected_indices, cluster_labels = _representative_sample_indices(items, sample_count)
         sample_method = "representative"
     _raise_if_validation_cancelled(dataset_id)
 
@@ -1105,8 +845,9 @@ async def validate_dataset(
         judged = await _judge_training_sample(svc, item, ds.data_type, active_criteria)
         _raise_if_validation_cancelled(dataset_id)
         overall = round(float(judged["overall"]), 2)
-        passed = overall >= min_score
-        if not passed:
+        individual_passed = overall >= min_score
+        # 클러스터 모드일 땐 개별 탈락 대신 클러스터 평균으로 일괄 판정한다.
+        if cluster_labels is None and not individual_passed:
             rejected_raw_indices.add(raw_idx)
         for criterion, score in judged["scores"].items():
             aggregate_scores.setdefault(criterion, []).append(float(score))
@@ -1115,13 +856,54 @@ async def validate_dataset(
             issue_counter[key] = issue_counter.get(key, 0) + 1
         per_sample.append({
             "index": idx,
+            "cluster": int(cluster_labels[idx]) if cluster_labels is not None else None,
             "question": item.get("question", "")[:500],
             "answer": item.get("answer", "")[:500],
             "scores": judged["scores"],
             "overall": overall,
-            "passed": passed,
+            "passed": individual_passed,
             "issues": judged["issues"],
         })
+
+    # 클러스터 단위 채택 판정: 각 클러스터에 뽑힌 대표 샘플들의 overall 평균이
+    # min_score 미만이면 해당 클러스터 전체를 학습 데이터에서 제외한다.
+    cluster_summary: list[dict] = []
+    if cluster_labels is not None:
+        import numpy as np
+        cluster_scores: dict[int, list[float]] = {}
+        for sample in per_sample:
+            label = sample["cluster"]
+            if label is None:
+                continue
+            cluster_scores.setdefault(int(label), []).append(float(sample["overall"]))
+        cluster_avg = {
+            label: (sum(scores) / len(scores)) if scores else 0.0
+            for label, scores in cluster_scores.items()
+        }
+        rejected_clusters = {label for label, avg in cluster_avg.items() if avg < min_score}
+        # per-sample에 클러스터 평균/판정 부착 (UI 표시용)
+        for sample in per_sample:
+            label = sample["cluster"]
+            if label is None:
+                continue
+            sample["cluster_avg"] = round(cluster_avg.get(int(label), 0.0), 2)
+            sample["cluster_passed"] = int(label) not in rejected_clusters
+        # 클러스터 전체 멤버를 raw index로 확장하여 탈락 처리
+        for item_idx, label in enumerate(cluster_labels):
+            if int(label) in rejected_clusters:
+                rejected_raw_indices.add(items_with_raw_indices[item_idx][0])
+        # 결과 payload용 클러스터 요약
+        unique_labels, counts = np.unique(cluster_labels, return_counts=True)
+        for label, count in zip(unique_labels, counts):
+            label_int = int(label)
+            cluster_summary.append({
+                "label": label_int,
+                "size": int(count),
+                "sample_count": len(cluster_scores.get(label_int, [])),
+                "avg_score": round(cluster_avg.get(label_int, 0.0), 2),
+                "passed": label_int not in rejected_clusters,
+            })
+        cluster_summary.sort(key=lambda c: c["label"])
 
     if _push_progress is not None:
         _push_progress(
@@ -1240,6 +1022,8 @@ async def validate_dataset(
         "issues": issues,
         "sampleIndices": selected_indices,
         "samples": per_sample,
+        "clusters": cluster_summary,
+        "clusterMode": cluster_labels is not None,
         "createdAt": datetime.utcnow().isoformat(),
     }
     _validation_cancelled.discard(dataset_id)

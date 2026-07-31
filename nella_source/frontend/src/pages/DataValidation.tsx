@@ -340,6 +340,14 @@ interface ValidationCriteria {
   accuracy: boolean; relevance: boolean; clarity: boolean; completeness: boolean; diversity: boolean;
 }
 
+interface ClusterSummary {
+  label: number;
+  size: number;
+  sample_count: number;
+  avg_score: number;
+  passed: boolean;
+}
+
 interface ValidationResult {
   id: string;
   datasetName: string;
@@ -366,6 +374,8 @@ interface ValidationResult {
   recommendation: "ready" | "needs_work" | "not_recommended";
   criteria: { name: string; score: number; color: string }[];
   issues: { text: string; count: number; severity: "high" | "medium" | "low" }[];
+  clusters?: ClusterSummary[];
+  clusterMode?: boolean;
   createdAt: Date;
 }
 
@@ -549,6 +559,8 @@ const ValidationPanel: React.FC<{
           recommendation: (validation.recommendation as ValidationResult["recommendation"]) ?? "needs_work",
           criteria: (validation.criteria as ValidationResult["criteria"]) ?? [],
           issues: (validation.issues as ValidationResult["issues"]) ?? [],
+          clusters: (validation.clusters as ValidationResult["clusters"]) ?? undefined,
+          clusterMode: typeof validation.clusterMode === "boolean" ? validation.clusterMode : undefined,
           filteredDataset: validation.filteredDataset as ValidationResult["filteredDataset"],
           filteredDatasetId: validation.filteredDatasetId != null ? Number(validation.filteredDatasetId) : undefined,
           filteredDatasetName: validation.filteredDatasetName ? String(validation.filteredDatasetName) : undefined,
@@ -876,7 +888,11 @@ const ValidationPanel: React.FC<{
                   <div className="flex flex-wrap gap-3 mt-1.5 text-xs">
                     <span className="text-green-700">유지 {displayResult.keptCount ?? displayResult.filteredDataset.train_count ?? 0}개</span>
                     <span className="text-red-600">제거 {displayResult.removedCount ?? 0}개</span>
-                    <span className="text-gray-500">기준 {displayResult.minScore ?? 6.5}/10 미만 제거</span>
+                    <span className="text-gray-500">
+                      {displayResult.clusterMode
+                        ? `클러스터 평균 ${displayResult.minScore ?? 6.5}/10 미만 클러스터 전체 제거`
+                        : `기준 ${displayResult.minScore ?? 6.5}/10 미만 제거`}
+                    </span>
                   </div>
                   {displayResult.filteredDataset.train_path && (
                     <p className="flex items-center gap-1.5 text-xs text-blue-700 font-mono mt-2">
@@ -885,6 +901,48 @@ const ValidationPanel: React.FC<{
                     </p>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+          {displayResult.clusterMode && displayResult.clusters && displayResult.clusters.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-600">클러스터별 채택 결과 (KMeans, k={displayResult.clusters.length})</p>
+                <p className="text-[11px] text-gray-500">
+                  대표 샘플 평균 &lt; {displayResult.minScore ?? 6.5} → 클러스터 전체 탈락
+                </p>
+              </div>
+              <div className="space-y-1">
+                {displayResult.clusters.map((c) => (
+                  <div
+                    key={c.label}
+                    className={`flex items-center gap-3 px-2.5 py-1.5 rounded border text-xs ${
+                      c.passed
+                        ? "border-green-200 bg-green-50 text-green-800"
+                        : "border-red-200 bg-red-50 text-red-700"
+                    }`}
+                  >
+                    <span className="font-mono font-semibold w-14 flex-shrink-0">C{c.label}</span>
+                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                      <span className="text-gray-600">항목 <span className="font-semibold text-gray-800">{c.size}</span></span>
+                      <span className="text-gray-600">대표 <span className="font-semibold text-gray-800">{c.sample_count}</span></span>
+                      <div className="flex-1 min-w-0 h-1.5 bg-gray-200 rounded overflow-hidden">
+                        <div
+                          className={`h-full ${c.passed ? "bg-green-500" : "bg-red-500"}`}
+                          style={{ width: `${Math.min(100, (c.avg_score / 10) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className={`font-semibold w-12 text-right flex-shrink-0 ${c.passed ? "text-green-700" : "text-red-600"}`}>
+                      {c.avg_score.toFixed(1)}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold w-14 text-center flex-shrink-0 ${
+                      c.passed ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"
+                    }`}>
+                      {c.passed ? "채택" : "탈락"}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

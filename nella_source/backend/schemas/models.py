@@ -287,8 +287,50 @@ class ChatRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0, le=2)
     stream: bool = False
     use_rag: bool = False
-    rag_document_ids: list[int] = Field(default=[])
+    rag_collection_id: Optional[int] = None  # legacy: single RAG DB (backward compat)
+    rag_collection_ids: list[int] = Field(default_factory=list)  # multi-select: RAG DBs to query
+    rag_document_ids: list[int] = Field(default=[])  # optional filter within collection(s)
     rag_top_k: Optional[int] = Field(default=None, ge=1, le=20)
+
+
+class RagCollectionDocInfo(BaseModel):
+    document_id: int
+    filename: str
+    chunk_count: int
+    indexed_at: Optional[datetime] = None
+
+
+class RagCollectionResponse(BaseModel):
+    id: int
+    name: str
+    description: str = ""
+    chroma_name: str
+    chunk_count: int
+    embedding_model: Optional[str] = None
+    document_count: int
+    documents: list[RagCollectionDocInfo] = Field(default_factory=list)
+    # Background indexing progress
+    status: str = "idle"  # idle|pending|indexing|completed|failed
+    progress_stage: Optional[str] = None
+    progress_current: int = 0
+    progress_total: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreateRagCollectionRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    document_ids: list[int] = Field(default_factory=list)
+
+
+class UpdateRagCollectionRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    document_ids: Optional[list[int]] = None
 
 
 class RagSource(BaseModel):

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import nellaConcept from "../assets/Figures/NELLA_Concept_Main.png";
 import { useAgentPolling } from "../hooks/useAgentPolling";
 import { Link } from "react-router-dom";
-import { FileText, Database, Cpu, BarChart3, MessageSquare, CheckCircle, AlertCircle, Clock, Play, ShieldCheck, FlaskConical, Trophy, BookOpen, ChevronRight } from "lucide-react";
+import { FileText, Database, Cpu, BarChart3, MessageSquare, CheckCircle, AlertCircle, Clock, Play, ShieldCheck, FlaskConical, Trophy, BookOpen, ChevronRight, Library } from "lucide-react";
 import { documentsApi, trainingDataApi, trainingApi, statusApi, TrainingJob, ARJob } from "../services/api";
 
 type RecentJob = {
@@ -14,6 +14,7 @@ type RecentJob = {
   created_at: string;
 };
 import UserGuideModal from "../components/UserGuideModal";
+import { useT } from "../i18n";
 
 const statusColor = (s: string) => {
   if (s === "running")   return "bg-blue-50 text-blue-700";
@@ -23,6 +24,7 @@ const statusColor = (s: string) => {
 };
 
 const Dashboard: React.FC = () => {
+  const { t } = useT();
   const [stats, setStats] = useState({ documents: 0, datasets: 0, trainingJobs: 0, completedJobs: 0, runningJobs: 0 });
   const [status, setStatus] = useState<Record<string, unknown>>({});
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
@@ -79,15 +81,16 @@ const Dashboard: React.FC = () => {
   ];
 
   const pipelineSteps = [
-    { step: 1, label: "문서 업로드",     link: "/documents",        icon: FileText,     desc: "PDF, DOCX, HWP 파일 처리" },
-    { step: 2, label: "학습데이터 생성", link: "/data",             icon: Database,     desc: "AI로 Q&A 학습 데이터 자동 생성" },
-    { step: 3, label: "학습데이터 검증", link: "/data-validation",  icon: ShieldCheck,  desc: "데이터 품질 검증 및 필터링" },
-    { step: 4, label: "기반모델 선택",   link: "/models",           icon: Cpu,          desc: "HuggingFace 소형 모델 다운로드" },
-    { step: 5, label: "모델 검증",       link: "/model-validation", icon: FlaskConical, desc: "후보 모델 적합성 테스트" },
-    { step: 6, label: "모델 훈련",       link: "/training",         icon: Play,         desc: "SFT, DPO, 자동 최적화 훈련" },
-    { step: 7, label: "훈련결과",        link: "/training-results", icon: Trophy,       desc: "훈련된 모델 다운로드 및 관리" },
-    { step: 8, label: "모델 평가",       link: "/evaluation",       icon: BarChart3,    desc: "BLEU, ROUGE, 성능 지표 확인" },
-    { step: 9, label: "대화 테스트",     link: "/chat",             icon: MessageSquare,desc: "훈련된 모델로 직접 대화" },
+    { step: 1,  label: "문서 업로드",     link: "/documents",        icon: FileText,     desc: "PDF, DOCX, HWP 파일 처리" },
+    { step: 2,  label: "학습데이터 생성", link: "/data",             icon: Database,     desc: "AI로 Q&A 학습 데이터 자동 생성" },
+    { step: 3,  label: "학습데이터 검증", link: "/data-validation",  icon: ShieldCheck,  desc: "데이터 품질 검증 및 필터링" },
+    { step: 4,  label: "기반모델 선택",   link: "/models",           icon: Cpu,          desc: "HuggingFace 소형 모델 다운로드" },
+    { step: 5,  label: "모델 검증",       link: "/model-validation", icon: FlaskConical, desc: "후보 모델 적합성 테스트" },
+    { step: 6,  label: "모델 훈련",       link: "/training",         icon: Play,         desc: "SFT, DPO, 자동 최적화 훈련" },
+    { step: 7,  label: "훈련결과",        link: "/training-results", icon: Trophy,       desc: "훈련된 모델 다운로드 및 관리" },
+    { step: 8,  label: "모델 평가",       link: "/evaluation",       icon: BarChart3,    desc: "BLEU, ROUGE, 성능 지표 확인" },
+    { step: 9,  label: "RAG DB 관리",     link: "/rag-db",           icon: Library,      desc: "문서 기반 벡터DB 생성·관리" },
+    { step: 10, label: "대화 테스트",     link: "/chat",             icon: MessageSquare,desc: "훈련된 모델·RAG DB로 직접 대화" },
   ];
 
   return (
@@ -102,12 +105,12 @@ const Dashboard: React.FC = () => {
             <BookOpen size={17} className="text-blue-600" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold text-blue-900">NELLA 사용 가이드</p>
-            <p className="text-xs text-blue-600">처음이시라면 9단계 파이프라인 흐름을 한눈에 확인하세요</p>
+            <p className="text-sm font-semibold text-blue-900">{t("dash.guide.title")}</p>
+            <p className="text-xs text-blue-600">{t("dash.guide.desc")}</p>
           </div>
         </div>
         <span className="text-xs font-semibold text-blue-600 group-hover:text-blue-700 flex items-center gap-1 flex-shrink-0">
-          가이드 열기
+          {t("dash.guide.cta")}
           <ChevronRight size={14} />
         </span>
       </button>

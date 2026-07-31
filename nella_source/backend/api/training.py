@@ -27,10 +27,24 @@ from backend.schemas.models import (
 from backend.agents.training_agent import training_agent
 from backend.agents.autoresearch_agent import autoresearch_agent, AutoResearchConfig
 from backend.services.hf_registry import hf_registry
+from backend.services.adapter_card import (
+    write_card_for_training_job as _write_adapter_card_for_job,
+    write_card_for_autoresearch_job as _write_adapter_card_for_ar,
+)
 from backend.config import settings
 from loguru import logger
 
 router = APIRouter(prefix="/training", tags=["training"])
+
+
+def _content_disposition(filename: str) -> str:
+    """Content-Disposition 헤더를 안전하게 구성 (파일명에 한글 등 non-latin1 문자가 있어도 동작).
+
+    latin-1 인코딩 가능한 ASCII fallback(filename)과 RFC 5987 UTF-8 인코딩(filename*)을 함께 넣는다.
+    """
+    from urllib.parse import quote
+    ascii_name = filename.encode("ascii", "ignore").decode() or "download"
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 
 # Track WebSocket connections for live updates
 _ws_connections: dict[int, list[WebSocket]] = {}
@@ -257,6 +271,11 @@ async def start_sft_training(
                     j.final_loss = result.get("final_loss")
                     j.training_metrics = result.get("training_metrics", [])
                     await session.commit()
+                    # Drop a self-describing adapter card next to the weights
+                    try:
+                        await _write_adapter_card_for_job(session, j)
+                    except Exception as _card_err:
+                        logger.warning(f"Failed to write adapter card for job {job_id}: {_card_err}")
 
             msg_type = "cancelled" if result.get("cancelled") else "completed"
             await broadcast_to_job(job_id, {"type": msg_type, "result": result})
@@ -358,6 +377,10 @@ async def start_dpo_training(
                     j.final_loss = result.get("final_loss")
                     j.training_metrics = result.get("training_metrics", [])
                     await session.commit()
+                    try:
+                        await _write_adapter_card_for_job(session, j)
+                    except Exception as _card_err:
+                        logger.warning(f"Failed to write adapter card for DPO job {job_id}: {_card_err}")
 
         except Exception as e:
             logger.error(f"DPO job {job_id} failed: {e}")
@@ -455,6 +478,9 @@ async def start_autoresearch(
                             "duration_seconds": data.get("duration_seconds") or 0,
                             "metrics_history": data.get("metrics_history") or [],
                             "error": data.get("error"),
+                            # 4번째 이후 LLM 결정 trial의 근거·전략 정보 함께 저장
+                            "reasoning": data.get("reasoning"),
+                            "strategy": data.get("strategy"),
                         }
                         trials = [t for t in trials if int(t.get("trial_id", -1)) != trial_idx]
                         trials.append(trial_record)
@@ -526,6 +552,13 @@ async def start_autoresearch(
                 j.trial_results = ar_result.get("trial_results")
                 j.final_training_metrics = ar_result.get("final_training_metrics") or j.final_training_metrics
                 await session.commit()
+                # Adapter card next to the final_model
+                try:
+                    final_model_dir = ar_result.get("final_model_path")
+                    if final_model_dir:
+                        await _write_adapter_card_for_ar(session, ar_job_id, final_model_dir)
+                except Exception as _card_err:
+                    logger.warning(f"Failed to write adapter card for AutoResearch {ar_job_id}: {_card_err}")
 
             await broadcast_to_job(ar_job_id, {"type": "ar_completed", "result": ar_result})
 
@@ -814,18 +847,44 @@ async def list_trained_models(db: AsyncSession = Depends(get_db), minimal: bool 
 
 @router.get("/jobs/{job_id}/download")
 async def download_trained_model(job_id: int, db: AsyncSession = Depends(get_db)):
-    """훈련된 모델(어댑터) 디렉토리를 zip으로 다운로드."""
+    """훈련된 모델(어댑터) 디렉토리를 zip으로 다운로드.
+
+    프론트에서 SFT/DPO 잡과 AutoResearch 잡을 통합 목록으로 노출하므로,
+    같은 job_id 값이 TrainingJob에 없으면 AutoResearchJob으로 폴백해서 처리한다.
+    """
     stmt = select(TrainingJob).where(TrainingJob.id == job_id)
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
-    if not job:
-        raise HTTPException(404, detail="Training job not found")
-    if not job.output_dir:
-        raise HTTPException(404, detail="No output directory recorded for this job")
 
-    output_path = Path(job.output_dir)
-    if not output_path.exists():
-        raise HTTPException(404, detail=f"Output directory not found: {job.output_dir}")
+    # 이 자료형은 SFT/DPO와 AutoResearch가 같은 API로 다뤄지므로,
+    # TrainingJob에서 못 찾으면 AutoResearchJob에서 다시 시도한다.
+    job_name: str
+    job_method: str
+    output_path: Path
+    if job:
+        if not job.output_dir:
+            raise HTTPException(404, detail="No output directory recorded for this job")
+        output_path = Path(job.output_dir)
+        if not output_path.exists():
+            raise HTTPException(404, detail=f"Output directory not found: {job.output_dir}")
+        job_name = job.name or f"job{job_id}"
+        job_method = job.method.value if hasattr(job.method, "value") else (job.method or "model")
+    else:
+        ar_stmt = select(AutoResearchJob).where(AutoResearchJob.id == job_id)
+        ar_result = await db.execute(ar_stmt)
+        ar_job = ar_result.scalar_one_or_none()
+        if not ar_job:
+            raise HTTPException(404, detail="Training job not found")
+        # AutoResearch 최종 모델 위치: data/models/autoresearch_{id}/final_model
+        ar_output = settings.DATA_DIR / "models" / f"autoresearch_{job_id}" / "final_model"
+        if not ar_output.exists():
+            raise HTTPException(
+                404,
+                detail=f"AutoResearch 최종 모델 디렉토리가 없습니다: {ar_output}",
+            )
+        output_path = ar_output
+        job_name = ar_job.name or f"autoresearch{job_id}"
+        job_method = f"AR_{ar_job.method or 'lora'}"
 
     loop = asyncio.get_event_loop()
 
@@ -840,9 +899,8 @@ async def download_trained_model(job_id: int, db: AsyncSession = Depends(get_db)
 
     zip_path = await loop.run_in_executor(None, _create_zip)
 
-    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in (job.name or f"job{job_id}"))
-    method_str = job.method.value if hasattr(job.method, "value") else (job.method or "model")
-    filename = f"NELLA_{safe_name}_{method_str}_{job_id}.zip"
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in job_name)
+    filename = f"NELLA_{safe_name}_{job_method}_{job_id}.zip"
 
     async def _stream():
         try:
@@ -858,7 +916,7 @@ async def download_trained_model(job_id: int, db: AsyncSession = Depends(get_db)
     return StreamingResponse(
         _stream(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(filename)},
     )
 
 
@@ -967,6 +1025,48 @@ async def merge_progress_sse(job_id: int):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@router.post("/jobs/{job_id}/adapter-card")
+async def regenerate_adapter_card(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Regenerate the NELLA adapter card for an already-completed training job.
+
+    Useful for jobs finished before this feature existed, or when metadata
+    (dataset info, hyperparameters) has been corrected in the DB.
+    """
+    stmt = select(TrainingJob).where(TrainingJob.id == job_id)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(404, detail=f"Training job {job_id} not found")
+    if not job.output_dir:
+        raise HTTPException(400, detail="이 잡에는 output_dir가 없습니다. 완료된 잡만 가능합니다.")
+    try:
+        await _write_adapter_card_for_job(db, job)
+    except Exception as e:
+        raise HTTPException(500, detail=f"카드 생성 실패: {e}")
+    return {
+        "status": "success",
+        "output_dir": job.output_dir,
+        "files": ["nella_adapter_card.json", "NELLA_ADAPTER_CARD.md"],
+    }
+
+
+@router.post("/autoresearch-jobs/{ar_id}/adapter-card")
+async def regenerate_ar_adapter_card(ar_id: int, db: AsyncSession = Depends(get_db)):
+    """Regenerate the NELLA adapter card for an AutoResearch final_model."""
+    final_model_dir = settings.MODELS_DIR / f"autoresearch_{ar_id}" / "final_model"
+    if not final_model_dir.exists():
+        raise HTTPException(404, detail=f"final_model 디렉토리가 없습니다: {final_model_dir}")
+    try:
+        await _write_adapter_card_for_ar(db, ar_id, str(final_model_dir))
+    except Exception as e:
+        raise HTTPException(500, detail=f"카드 생성 실패: {e}")
+    return {
+        "status": "success",
+        "output_dir": str(final_model_dir),
+        "files": ["nella_adapter_card.json", "NELLA_ADAPTER_CARD.md"],
+    }
+
+
 @router.get("/jobs/{job_id}/merged-download")
 async def download_merged_model(job_id: int, db: AsyncSession = Depends(get_db)):
     """병합된 모델 디렉토리를 zip으로 다운로드."""
@@ -1019,7 +1119,7 @@ async def download_merged_model(job_id: int, db: AsyncSession = Depends(get_db))
     return StreamingResponse(
         _stream(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(filename)},
     )
 
 

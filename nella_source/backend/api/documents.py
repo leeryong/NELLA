@@ -70,21 +70,10 @@ def _delete_document_artifacts(doc: Document) -> int:
     return deleted
 
 
-async def _index_document_for_rag(doc_id: int, progress_cb=None):
-    from backend.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Document).where(Document.id == doc_id))
-        doc = result.scalar_one_or_none()
-        if not doc or doc.status != DocumentStatus.COMPLETED or not doc.extracted_path:
-            return
-        try:
-            if progress_cb:
-                await progress_cb("VectorDB 인덱싱 중...", 96)
-            await rag_service.index_document(session, doc)
-            if progress_cb:
-                await progress_cb("VectorDB 인덱싱 완료", 99)
-        except Exception as e:
-            logger.warning(f"RAG indexing failed for doc {doc_id}: {e}")
+# Note: RAG indexing is no longer done implicitly on upload. Users create a
+# RAG DB (Chroma collection) explicitly on the RAG DB page and pick which
+# documents to include; that flow calls rag_service.index_document with a
+# collection name.
 
 
 async def _update_document_status(
@@ -208,8 +197,6 @@ async def upload_document(
                         if generate_thumbnail(original_path, thumb_path):
                             doc_record.thumbnail_path = thumb_path
                     await session.commit()
-            if settings.RAG_ENABLED:
-                await _index_document_for_rag(doc_id, push_progress)
         except Exception as e:
             logger.error(f"Background processing failed for doc {doc_id}: {e}")
             await q.put({"message": f"오류: {e}", "percent": 0, "done": True, "error": True})
@@ -539,8 +526,6 @@ async def reprocess_document(
                 if doc_record:
                     doc_record.original_path = result.get("original_path", str(original_path))
                     await session.commit()
-            if settings.RAG_ENABLED:
-                await _index_document_for_rag(doc_id, push_progress)
         except Exception as e:
             logger.error(f"Reprocessing failed for doc {doc_id}: {e}")
             await q.put({"message": f"오류: {e}", "percent": 0, "done": True, "error": True})
@@ -549,20 +534,6 @@ async def reprocess_document(
 
     background_tasks.add_task(reprocess)
     return {"status": "reprocessing", "doc_id": doc_id}
-
-
-@router.post("/{doc_id}/rag/reindex")
-async def reindex_document_rag(doc_id: int, db: AsyncSession = Depends(get_db)):
-    """Rebuild VectorDB chunks for an extracted document."""
-    stmt = select(Document).where(Document.id == doc_id)
-    result = await db.execute(stmt)
-    doc = result.scalar_one_or_none()
-    if not doc:
-        raise HTTPException(404, detail="Document not found")
-    if doc.status != DocumentStatus.COMPLETED or not doc.extracted_path:
-        raise HTTPException(400, detail="문서 텍스트 추출이 완료된 뒤 인덱싱할 수 있습니다.")
-    count = await rag_service.index_document(db, doc)
-    return {"status": "success", "doc_id": doc_id, "chunk_count": count}
 
 
 @router.delete("/all", response_model=StatusResponse)

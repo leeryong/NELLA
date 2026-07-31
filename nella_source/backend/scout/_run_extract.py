@@ -1,6 +1,15 @@
-"""Cython .so 로 컴파일된 a_extract_tcm_10pct 의 main() 을 실행하는 런처.
-호출: python -m backend.scout._run_extract --input-jsonl ... --target-name ...
+"""Launcher for the scout `a_extract_tcm_10pct` step.
+
+Kept as plain source (never obfuscated) so `python _run_extract.py ...` runs whether
+the step module is a .py or a Cython-compiled .so. It puts the project root on
+sys.path, then imports and runs the module's main(); argparse reads the args
+that follow.
 """
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
 from backend.scout.a_extract_tcm_10pct import main
 
 if __name__ == "__main__":

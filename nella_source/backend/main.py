@@ -160,37 +160,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to re-register orphaned documents: {e}")
 
-    # Re-index documents whose RAG vectors are missing (e.g. after embedding-model
-    # swap or first run after Chroma migration). Runs in background to avoid
-    # blocking startup; BGE-M3 load + embedding takes time.
-    if settings.RAG_ENABLED:
-        async def _reindex_pending_docs():
-            try:
-                from backend.database import AsyncSessionLocal, Document, DocumentStatus
-                from backend.services.rag_service import rag_service
-                from sqlalchemy import select
-                async with AsyncSessionLocal() as session:
-                    result = await session.execute(
-                        select(Document).where(
-                            Document.status == DocumentStatus.COMPLETED,
-                            Document.extracted_path.isnot(None),
-                            Document.rag_indexed == False,  # noqa: E712
-                        )
-                    )
-                    docs = result.scalars().all()
-                    if not docs:
-                        return
-                    logger.info(f"Auto-reindexing {len(docs)} documents into ChromaDB (BGE-M3)")
-                    for doc in docs:
-                        try:
-                            await rag_service.index_document(session, doc)
-                        except Exception as inner_e:
-                            logger.warning(f"Auto-reindex failed for doc {doc.id}: {inner_e}")
-                    logger.info("Auto-reindex complete")
-            except Exception as e:
-                logger.error(f"Auto-reindex task failed: {e}")
-
-        asyncio.create_task(_reindex_pending_docs())
+    # Note: document → RAG indexing is now managed explicitly through the
+    # RAG DB page (per-collection). No implicit auto-reindex on startup.
 
     # Fix: mark any stuck PENDING/RUNNING training jobs as FAILED on startup
     try:
@@ -350,6 +321,7 @@ from backend.api.model_validation import router as model_validation_router
 from backend.api.chat import router as chat_router
 from backend.api.settings import router as settings_router
 from backend.api.agent_messages import router as agent_messages_router
+from backend.api.rag_db import router as rag_db_router
 
 app.include_router(documents_router, prefix="/api")
 app.include_router(training_data_router, prefix="/api")
@@ -361,6 +333,7 @@ app.include_router(model_validation_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(agent_messages_router, prefix="/api")
+app.include_router(rag_db_router, prefix="/api")
 
 
 @app.get("/")

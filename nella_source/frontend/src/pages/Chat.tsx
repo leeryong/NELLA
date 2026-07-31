@@ -5,9 +5,11 @@ import { MessageSquare } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
 const OWNED_PATH = "/chat";
-import { trainingApi, chatApi, modelsApi, ModelRecord, TrainedModelRecord, api } from "../services/api";
+import { Link } from "react-router-dom";
+import { trainingApi, chatApi, modelsApi, ragDbApi, ModelRecord, TrainedModelRecord, RagCollection, api } from "../services/api";
 import ChatWindow from "../components/ChatWindow";
 import PageHelp from "../components/PageHelp";
+import { useT } from "../i18n";
 
 type ProviderMode = "local" | "openai" | "anthropic" | "ollama";
 
@@ -24,6 +26,7 @@ const PROVIDER_MODELS: Record<string, string[]> = {
 
 // ── Chat page ──────────────────────────────────────────
 const Chat: React.FC = () => {
+  const { t } = useT();
   const [searchParams] = useSearchParams();
   const [completedJobs, setCompletedJobs] = useState<TrainedModelRecord[]>([]);
   const [downloadedModels, setDownloadedModels] = useState<ModelRecord[]>([]);
@@ -32,21 +35,23 @@ const Chat: React.FC = () => {
   const [selectedModelPath, setSelectedModelPath] = useState("");
   const [selectedModelName, setSelectedModelName] = useState("");
   const [providerModel, setProviderModel] = useState("");
-  const [ragEnabled, setRagEnabled] = useState(false);
   const [ragTopK, setRagTopK] = useState(4);
   const [ragDefaultExtractor, setRagDefaultExtractor] = useState("openDataLoader");
+  const [ragCollections, setRagCollections] = useState<RagCollection[]>([]);
+  const [ragCollectionIds, setRagCollectionIds] = useState<number[]>([]);
+  const ragEnabled = ragCollectionIds.length > 0;
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const autoLoadRef = useRef(false);
   const autoProviderRef = useRef(false);
   const toolProviderModelRef = useRef<string | null>(null);
 
   const loadModels = useCallback(async () => {
-    const [jobs, models, providers, settings] = await Promise.allSettled([
+    const [jobs, models, providers, settings, ragCols] = await Promise.allSettled([
       trainingApi.listTrainedModels(true), modelsApi.listDownloaded(),
       api.get<AvailableProviders>("/settings/available-providers"),
       api.get<{ rag_top_k: number; rag_default_extractor: string }>("/settings"),
+      ragDbApi.list(),
     ]);
     if (jobs.status === "fulfilled")      setCompletedJobs((jobs.value.data ?? []).filter((j: TrainedModelRecord) => j.status === "completed" && j.output_dir));
     if (models.status === "fulfilled")    setDownloadedModels(models.value.data ?? []);
@@ -55,9 +60,28 @@ const Chat: React.FC = () => {
       setRagTopK(settings.value.data.rag_top_k ?? 4);
       setRagDefaultExtractor(settings.value.data.rag_default_extractor ?? "openDataLoader");
     }
+    if (ragCols.status === "fulfilled") {
+      const list = ragCols.value.data ?? [];
+      setRagCollections(list);
+    }
   }, []);
   const isActive = useLocation().pathname === OWNED_PATH;
   const [injectQA, setInjectQA] = useState<{ question: string; answer: string; ts: number } | null>(null);
+  // NELLA가 test_model_chat을 실행 중일 때 UI에 파라미터/현황을 반영하기 위한 상태
+  const [agentChatProgress, setAgentChatProgress] = useState<{
+    phase: "preparing" | "generating" | "done" | "error";
+    percent?: number;
+    message?: string;
+    provider?: string | null;
+    provider_model?: string;
+    use_rag?: boolean;
+    rag_collection_ids?: number[];
+    model_path?: string;
+    question?: string;
+    answer_preview?: string;
+    ts?: number;
+  } | null>(null);
+  const lastAppliedAgentTsRef = useRef<number>(0);
   useAgentPolling(loadModels, { idle: 3_000, active: 2_000, enabled: isActive });
   useAgentToolResult(
     ["test_model_chat", "merge_adapter", "wait_for_merge"],
@@ -67,6 +91,13 @@ const Chat: React.FC = () => {
         const a = detail.result.answer;
         if (typeof q === "string" && typeof a === "string" && q && a) {
           setInjectQA({ question: q, answer: a, ts: Date.now() });
+        }
+        // 에이전트가 use_rag=true로 호출했으면 체크박스도 실제로 체크한다.
+        const argsUseRag = detail.args?.use_rag === true;
+        const rawIds = detail.args?.rag_collection_ids;
+        if (argsUseRag && Array.isArray(rawIds) && rawIds.length > 0) {
+          const ids = rawIds.map((v) => Number(v)).filter((v) => Number.isFinite(v));
+          if (ids.length > 0) setRagCollectionIds(ids);
         }
         const provider = typeof detail.result.provider === "string" ? detail.result.provider : undefined;
         if (provider === "openai" || provider === "anthropic" || provider === "ollama") {
@@ -117,6 +148,81 @@ const Chat: React.FC = () => {
     if (mode === "ollama")    setProviderModel(availableProviders.ollama_model);
   }, [mode, availableProviders]);
 
+  // NELLA 에이전트가 test_model_chat을 실행할 때 /chat/agent-progress/chat 폴링해서
+  // 파라미터(프로바이더/모델/RAG DB 선택 등)를 화면에 자동 반영한다.
+  useEffect(() => {
+    if (!isActive) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const res = await api.get<{
+          status?: string;
+          phase?: "preparing" | "generating" | "done" | "error";
+          percent?: number;
+          message?: string;
+          provider?: string | null;
+          provider_model?: string;
+          use_rag?: boolean;
+          rag_collection_ids?: number[];
+          model_path?: string;
+          question?: string;
+          answer_preview?: string;
+          ts?: number;
+        }>("/chat/agent-progress/chat");
+        if (stopped) return;
+        const p = res.data;
+        if (!p || p.status === "idle" || !p.phase) {
+          setAgentChatProgress(null);
+          return;
+        }
+        setAgentChatProgress({
+          phase: p.phase,
+          percent: p.percent,
+          message: p.message,
+          provider: p.provider,
+          provider_model: p.provider_model,
+          use_rag: p.use_rag,
+          rag_collection_ids: p.rag_collection_ids,
+          model_path: p.model_path,
+          question: p.question,
+          answer_preview: p.answer_preview,
+          ts: p.ts,
+        });
+        // 새 진행 상황(ts 갱신)일 때만 UI 옵션을 한 번 자동 세팅한다 (사용자가 이후 클릭한 걸 매 폴링마다 되돌리지 않도록).
+        // phase 필터를 걸지 않는 이유: 도구가 빨리 끝나면 preparing/generating을 놓치고 done만 볼 수 있어서
+        // 그때도 UI를 반영해야 한다. error phase일 때만 UI 세팅을 건너뛴다.
+        const newTs = Number(p.ts || 0);
+        if (newTs > lastAppliedAgentTsRef.current && p.phase !== "error") {
+          lastAppliedAgentTsRef.current = newTs;
+          if (p.provider === "openai" || p.provider === "anthropic" || p.provider === "ollama") {
+            setMode(p.provider);
+            if (p.provider_model) {
+              toolProviderModelRef.current = p.provider_model;
+              setProviderModel(p.provider_model);
+            }
+            setReady(true);
+            setError(null);
+          } else if (p.model_path) {
+            setMode("local");
+            setSelectedModelPath(p.model_path);
+            setReady(true);
+            setError(null);
+          }
+          // use_rag=true이고 실제 id가 있을 때만 체크박스를 덮어쓴다.
+          // (agent가 RAG 안 쓰면 사용자가 이미 선택한 것 유지)
+          if (p.use_rag && Array.isArray(p.rag_collection_ids) && p.rag_collection_ids.length > 0) {
+            setRagCollectionIds(p.rag_collection_ids);
+          }
+        }
+      } catch {
+        // 서버 잠깐 끊김 등은 무시
+      }
+    };
+    void poll();
+    const interval = setInterval(poll, 2000);
+    return () => { stopped = true; clearInterval(interval); };
+  }, [isActive]);
+
   useEffect(() => {
     const path = searchParams.get("model_path");
     const name = searchParams.get("model_name");
@@ -140,16 +246,8 @@ const Chat: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableProviders]);
 
-  // 최신 완료 훈련 모델 자동 로드 (최초 1회, URL 파라미터 없을 때)
-  useEffect(() => {
-    if (autoLoadRef.current || ready || completedJobs.length === 0) return;
-    if (searchParams.get("model_path")) return; // URL 파라미터 우선
-    autoLoadRef.current = true;
-    const latest = completedJobs.reduce((a, b) => (a.id > b.id ? a : b));
-    if (latest.output_dir) {
-      activateLocal(latest.output_dir, latest.name ?? `모델 #${latest.id}`);
-    }
-  }, [completedJobs]);
+  // 로컬 모델 자동 로드는 하지 않음 — 사용자가 명시적으로 드롭다운/URL 파라미터로 선택했을 때만 로드.
+  // (?model_path=... URL 파라미터 경로는 위 useEffect에서 이미 처리)
 
   const activateLocal = async (path: string, name: string) => {
     setReady(false); setError(null); setLoading(true);
@@ -185,13 +283,44 @@ const Chat: React.FC = () => {
     /* 전체 페이지: 뷰포트 높이, flex-col */
     <div className="flex flex-col p-6 gap-4" style={{ height: "100vh", maxWidth: 1200, margin: "0 auto" }}>
       <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="w-7 h-7 rounded-md bg-blue-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">9</span>
+        <span className="w-7 h-7 rounded-md bg-blue-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">10</span>
         <MessageSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
         <div>
-          <div className="flex items-center gap-1"><h1 className="text-xl font-bold text-gray-900">대화 테스트</h1><PageHelp pageKey="chat" /></div>
-          <p className="text-xs text-gray-500">훈련된 모델로 직접 대화 테스트</p>
+          <div className="flex items-center gap-1"><h1 className="text-xl font-bold text-gray-900">{t("page.chat.title")}</h1><PageHelp pageKey="chat" /></div>
+          <p className="text-xs text-gray-500">{t("page.chat.desc")}</p>
         </div>
       </div>
+
+      {/* NELLA 에이전트 실행 배너 (test_model_chat 진행 중일 때만 노출) */}
+      {agentChatProgress && agentChatProgress.phase !== "done" && agentChatProgress.phase !== "error" && (
+        <div className="flex-shrink-0 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-blue-800">
+                🤖 NELLA 대화 테스트 실행 중
+                {agentChatProgress.provider && <span className="ml-1 text-blue-600">· {agentChatProgress.provider}{agentChatProgress.provider_model ? ` / ${agentChatProgress.provider_model}` : ""}</span>}
+                {agentChatProgress.rag_collection_ids && agentChatProgress.rag_collection_ids.length > 0 && (
+                  <span className="ml-1 text-blue-600">· RAG {agentChatProgress.rag_collection_ids.length}개</span>
+                )}
+              </p>
+              {agentChatProgress.question && (
+                <p className="text-xs text-blue-700 mt-0.5 truncate">
+                  <span className="text-blue-500">Q:</span> {agentChatProgress.question}
+                </p>
+              )}
+              {agentChatProgress.message && (
+                <p className="text-[11px] text-blue-500 mt-0.5">{agentChatProgress.message}</p>
+              )}
+              {typeof agentChatProgress.percent === "number" && (
+                <div className="mt-1.5 h-1 bg-blue-100 rounded overflow-hidden">
+                  <div className="h-full bg-blue-500 transition-all" style={{ width: `${agentChatProgress.percent}%` }} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 메인 영역: 왼쪽(모델선택+채팅) + 오른쪽(문서업로드) */}
       <div className="flex gap-4 flex-1 min-h-0">
@@ -220,19 +349,87 @@ const Chat: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <div>
-                <p className="text-xs font-medium text-gray-700">RAG 사용</p>
-                <p className="text-xs text-gray-400">업로드 문서를 VectorDB에서 검색해 답변 컨텍스트로 사용합니다.</p>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-700">
+                    RAG DB
+                    {ragEnabled ? (
+                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">ON · {ragCollectionIds.length}개</span>
+                    ) : (
+                      <span className="ml-1.5 text-[10px] text-gray-400">OFF</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-400">체크한 DB로 검색해 답변 컨텍스트로 사용합니다. 아무것도 체크하지 않으면 RAG를 사용하지 않습니다.</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {ragCollections.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setRagCollectionIds(
+                          ragCollections
+                            .filter((c) => c.status === "completed" && c.document_count > 0)
+                            .map((c) => c.id)
+                        )}
+                        className="text-[10px] text-blue-600 hover:underline"
+                      >모두 선택</button>
+                      <span className="text-gray-300 text-[10px]">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setRagCollectionIds([])}
+                        className="text-[10px] text-gray-500 hover:underline"
+                      >해제</button>
+                    </>
+                  )}
+                  <Link to="/rag-db" className="text-[10px] text-gray-500 hover:text-blue-600 hover:underline whitespace-nowrap">관리</Link>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setRagEnabled((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${ragEnabled ? "bg-blue-600" : "bg-gray-300"}`}
-                aria-pressed={ragEnabled}
-              >
-                <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${ragEnabled ? "translate-x-5" : "translate-x-1"}`} />
-              </button>
+              {ragCollections.length === 0 ? (
+                <div className="text-xs text-amber-600">
+                  아직 만든 RAG DB가 없습니다. <Link to="/rag-db" className="font-semibold text-blue-600 hover:underline">→ 9단계에서 생성</Link>
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-md bg-white max-h-36 overflow-y-auto divide-y divide-gray-50">
+                  {ragCollections.map((c) => {
+                    const checked = ragCollectionIds.includes(c.id);
+                    const ready = c.status === "completed" && c.document_count > 0;
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 text-xs cursor-pointer ${
+                          checked ? "bg-blue-50" : ready ? "hover:bg-gray-50" : "opacity-60 cursor-not-allowed"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={!ready}
+                          checked={checked}
+                          onChange={(e) => {
+                            setRagCollectionIds((prev) =>
+                              e.target.checked
+                                ? [...prev, c.id]
+                                : prev.filter((x) => x !== c.id)
+                            );
+                          }}
+                          className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0"
+                        />
+                        <span className="flex-1 min-w-0 truncate font-medium text-gray-800">{c.name}</span>
+                        <span className="text-[10px] text-gray-400 flex-shrink-0">
+                          {c.document_count}문서 · {c.chunk_count.toLocaleString()}청크
+                        </span>
+                        {c.status !== "completed" && (
+                          <span className={`text-[10px] px-1 py-0.5 rounded flex-shrink-0 ${
+                            c.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {c.status === "failed" ? "실패" : "진행중"}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {mode === "local" && (
@@ -314,11 +511,18 @@ const Chat: React.FC = () => {
                 provider={mode === "local" ? undefined : mode}
                 providerModel={mode !== "local" ? providerModel : undefined}
                 modelName={displayName}
-                ragEnabled={ragEnabled}
+                ragEnabled={ragEnabled && ragCollectionIds.length > 0}
+                ragCollectionIds={ragCollectionIds}
                 ragTopK={ragTopK}
                 ragDefaultExtractor={ragDefaultExtractor}
                 injectQA={injectQA}
                 onInjectedQA={() => setInjectQA(null)}
+                pendingUserMessage={
+                  agentChatProgress && agentChatProgress.question && agentChatProgress.ts
+                    ? { question: agentChatProgress.question, ts: agentChatProgress.ts }
+                    : null
+                }
+                agentThinking={agentChatProgress?.phase === "generating"}
               />
             ) : (
               <div className="h-full flex items-center justify-center bg-white rounded-xl border border-dashed border-gray-200">

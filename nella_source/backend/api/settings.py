@@ -7,8 +7,6 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-import os
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -17,9 +15,7 @@ from loguru import logger
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-# config.py 의 env_file 해석과 동일한 규칙: NELLA_ENV_FILE 가 있으면 그 경로(컨테이너의 영속 볼륨),
-# 없으면 프로젝트 루트의 .env (로컬 개발). UI 의 설정 저장이 backend 재시작 후에도 유지된다.
-ENV_FILE = Path(os.environ.get("NELLA_ENV_FILE") or (BASE_DIR / ".env"))
+ENV_FILE = BASE_DIR / ".env"
 
 
 class SettingsResponse(BaseModel):
@@ -250,10 +246,11 @@ async def test_provider_connection(req: TestProviderRequest):
         base_url = req.base_url or settings.OPENAI_BASE_URL
         try:
             client = openai.AsyncOpenAI(api_key=key, base_url=base_url or None)
+            from backend.services.llm_service import _openai_token_kwargs
             resp = await client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": "Reply with just OK"}],
-                max_tokens=5,
+                **_openai_token_kwargs(model, 5, 1.0),
             )
             return {"status": "success", "provider": "openai", "model": model,
                     "response": resp.choices[0].message.content}

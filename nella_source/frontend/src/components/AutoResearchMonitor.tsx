@@ -16,6 +16,9 @@ interface TrialState {
   duration_seconds?: number;
   currentStep?: number;
   totalSteps?: number;
+  // 4번째 trial부터 LLM이 결정하는 조합: 결정 근거 및 전략 표시.
+  reasoning?: string;
+  strategy?: "preset" | "llm";
 }
 
 interface LogLine {
@@ -74,8 +77,10 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
           final_loss: t.final_loss as number,
           eval_loss: t.eval_loss as number | undefined,
           duration_seconds: t.duration_seconds as number,
+          reasoning: typeof t.reasoning === "string" ? (t.reasoning as string) : undefined,
+          strategy: i >= 3 ? ("llm" as const) : ("preset" as const),
         };
-        return { trial_id: i, status: "pending" as const };
+        return { trial_id: i, status: "pending" as const, strategy: i >= 3 ? ("llm" as const) : ("preset" as const) };
       });
     }
     return [];
@@ -134,9 +139,11 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
             final_loss: t.final_loss as number,
             eval_loss: t.eval_loss as number | undefined,
             duration_seconds: t.duration_seconds as number,
+            reasoning: typeof t.reasoning === "string" ? (t.reasoning as string) : undefined,
+            strategy: i >= 3 ? ("llm" as const) : ("preset" as const),
           };
         }
-        return { trial_id: i, status: "pending" as const };
+        return { trial_id: i, status: "pending" as const, strategy: i >= 3 ? ("llm" as const) : ("preset" as const) };
       }));
     }
 
@@ -286,6 +293,8 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
                 duration_seconds: d.duration_seconds as number,
                 currentStep: undefined,
                 totalSteps: undefined,
+                reasoning: typeof d.reasoning === "string" ? (d.reasoning as string) : undefined,
+                strategy: (d.strategy as "preset" | "llm" | undefined) ?? (trialIdx >= 3 ? "llm" : "preset"),
               };
               setTrials((prev) => {
                 const exists = prev.find((t) => t.trial_id === trialIdx);
@@ -299,18 +308,36 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
               setCurrentTrialId(trialNum < total ? trialNum : null);
             } else if (d.status === "trial_failed") {
               addLog(`Trial ${trialNum}/${total} 실패: ${d.error}`, "error");
-              updateTrial(trialIdx, { status: "failed", config: (d.config as Record<string, unknown>) || {} });
+              updateTrial(trialIdx, {
+                status: "failed",
+                config: (d.config as Record<string, unknown>) || {},
+                reasoning: typeof d.reasoning === "string" ? (d.reasoning as string) : undefined,
+                strategy: (d.strategy as "preset" | "llm" | undefined) ?? (trialIdx >= 3 ? "llm" : "preset"),
+              });
             } else {
               // trial starting — add new card
               setCurrentTrialId(trialIdx);
               const cfg = d.config as Record<string, unknown>;
+              const strategy = (d.strategy as "preset" | "llm" | undefined) ?? (trialIdx >= 3 ? "llm" : "preset");
+              const reasoning = typeof d.reasoning === "string" ? (d.reasoning as string) : undefined;
               addLog(
-                `Trial ${trialNum}/${total} 시작 — lr=${(cfg?.learning_rate as number)?.toExponential(1)}, lora_r=${cfg?.lora_r}, batch=${cfg?.per_device_train_batch_size}`,
+                `Trial ${trialNum}/${total} 시작 [${strategy === "llm" ? "🧠 LLM 결정" : "사전 설계"}] — lr=${(cfg?.learning_rate as number)?.toExponential(1)}, lora_r=${cfg?.lora_r}, batch=${cfg?.per_device_train_batch_size}`,
                 "info"
               );
+              if (reasoning && strategy === "llm") {
+                addLog(`  ↳ ${reasoning}`, "info");
+              }
               setTrials((prev) => {
                 const exists = prev.find((t) => t.trial_id === trialIdx);
-                const next: TrialState = { trial_id: trialIdx, status: "running", config: cfg || {}, currentStep: 0, totalSteps: job.steps_per_trial };
+                const next: TrialState = {
+                  trial_id: trialIdx,
+                  status: "running",
+                  config: cfg || {},
+                  currentStep: 0,
+                  totalSteps: job.steps_per_trial,
+                  reasoning,
+                  strategy,
+                };
                 if (exists) return prev.map((t) => t.trial_id === trialIdx ? next : t);
                 return [...prev, next];
               });
@@ -469,7 +496,7 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
                 </div>
 
                 {/* Trial number + label */}
-                <div className="w-16 flex-shrink-0">
+                <div className="w-24 flex-shrink-0">
                   <span className={`text-xs font-semibold ${
                     t.status === "running" ? "text-blue-700" :
                     t.status === "done"    ? (isBest ? "text-green-700" : "text-gray-700") :
@@ -478,6 +505,14 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
                     Trial {t.trial_id + 1}
                     {isBest && <Trophy className="w-3 h-3 text-yellow-500 inline ml-1" />}
                   </span>
+                  {t.strategy === "llm" && (
+                    <span
+                      className="ml-1 px-1 py-0.5 text-[9px] font-semibold rounded bg-purple-100 text-purple-700 align-middle"
+                      title="LLM 에이전트가 이전 trial 결과를 보고 결정한 조합"
+                    >
+                      🧠 LLM
+                    </span>
+                  )}
                 </div>
 
                 {/* Hyperparams (once config available) */}
@@ -506,6 +541,14 @@ const AutoResearchMonitor: React.FC<ARMonitorProps> = ({ job, onComplete, onCanc
                   </div>
                 )}
               </div>
+
+              {/* LLM 결정 근거 (strategy=llm이고 reasoning이 있을 때만) */}
+              {t.reasoning && t.strategy === "llm" && (
+                <div className="mt-1.5 ml-8 flex items-start gap-1.5 text-xs text-purple-700">
+                  <span className="flex-shrink-0">💡</span>
+                  <span className="flex-1 min-w-0 italic leading-snug">{t.reasoning}</span>
+                </div>
+              )}
 
               {/* Per-trial step progress bar (only while running) */}
               {t.status === "running" && t.totalSteps !== undefined && t.totalSteps > 0 && (

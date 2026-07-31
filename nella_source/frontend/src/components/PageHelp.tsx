@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { HelpCircle, X, ChevronRight } from "lucide-react";
-import { helpContent } from "../data/helpContent";
+import { getHelpContent } from "../data/helpContent";
+import { useT } from "../i18n";
 
 interface PageHelpProps {
   pageKey: string;
 }
 
 export default function PageHelp({ pageKey }: PageHelpProps) {
+  const { lang, t } = useT();
   const [open, setOpen] = useState(false);
-  const content = helpContent[pageKey];
+  const content = getHelpContent(lang)[pageKey];
   if (!content) return null;
 
   return (
@@ -17,10 +19,10 @@ export default function PageHelp({ pageKey }: PageHelpProps) {
       <button
         onClick={() => setOpen(true)}
         className="ml-3 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 rounded-full text-xs font-semibold border border-blue-200 hover:border-blue-300 transition-colors flex-shrink-0"
-        title="페이지 도움말"
+        title={t("help.title_hint")}
       >
         <HelpCircle size={13} />
-        <span>도움말</span>
+        <span>{t("help.button")}</span>
       </button>
 
       {/* ── 모달 ── */}
@@ -74,12 +76,12 @@ export default function PageHelp({ pageKey }: PageHelpProps) {
 
             {/* Footer */}
             <div className="px-6 py-3 border-t border-gray-100 flex-shrink-0 flex items-center justify-between">
-              <p className="text-xs text-gray-400">NELLA 도움말 · 우측 어시스턴트 패널에서도 질문할 수 있습니다.</p>
+              <p className="text-xs text-gray-400">{t("help.footer")}</p>
               <button
                 onClick={() => setOpen(false)}
                 className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium rounded-lg transition-colors"
               >
-                닫기
+                {t("help.close")}
               </button>
             </div>
           </div>

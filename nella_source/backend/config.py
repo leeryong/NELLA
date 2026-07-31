@@ -90,9 +90,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     class Config:
-        # `NELLA_ENV_FILE` 환경변수로 .env 경로를 덮어쓸 수 있다.
-        # Docker 컨테이너에서는 영속 볼륨(/app/data/.env)을 가리켜 UI 설정 변경이 재시작 후에도 유지됨.
-        env_file = os.environ.get("NELLA_ENV_FILE") or str(BASE_DIR / ".env")
+        env_file = BASE_DIR / ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
 
