@@ -19,6 +19,12 @@
 
 ## 🆕 Latest News
 
+> ### 🪟 Now installable with a **Windows installer**!
+>
+> You can run **NELLA** without Docker. Just download the installer and run it — no Python, Node.js, or Docker setup required.
+>
+> ➡️ **[Download the NELLA Windows installer](https://github.com/leeryong/NELLA/releases/latest)** (Windows 10/11, 64-bit)
+
 > ### 🌐 Now on **TAW** — meet it as an agent!
 >
 > **NELLA** has joined **[The Agents Web (TAW)](https://github.com/leeryong/The_Agents_Web_TAW/blob/main/README.md)** as an **agent**. No install needed — with a single **TAW Browser**, meet it **anywhere on PC or mobile** (Windows · macOS · Linux · iOS · Android), via **chat or its web app**.
@@ -65,7 +71,22 @@
 
 ## 🛠️ Installation
 
-Everything needed to install NELLA is provided as Docker containers. With no separate Python or Node.js setup required, you can run NELLA right away with just a few commands as long as Docker is installed.
+Pick either option. **On Windows, the installer is recommended.**
+
+### Option 1 — Windows installer (recommended)
+
+No Docker, no Python. Download one file and run it.
+
+1. Download `NELLA-Setup-0.1.0.exe` from the **[releases page](https://github.com/leeryong/NELLA/releases/latest)**
+2. Run the downloaded file (no administrator rights needed — it installs into your user folder)
+3. Launch it from the **NELLA** desktop shortcut
+
+- **Requirements**: Windows 10/11, 64-bit
+- **GPU training**: CPU mode by default. If you have an NVIDIA GPU, add the CUDA training stack from *Settings → Install GPU training* in the app (~3 GB download, ~8 GB on disk after install). Restart the app afterwards to activate the GPU.
+
+### Option 2 — Docker (Windows · macOS · Linux)
+
+Everything needed to run NELLA is provided as Docker containers. With no separate Python or Node.js setup required, you can run NELLA with just a few commands as long as Docker is installed.
 
 ```bash
 git clone https://github.com/leeryong/NELLA.git
@@ -84,7 +105,7 @@ The initial build takes 10–20 minutes to install dependencies. Once complete, 
 - **Data quality validation**: Reviews duplicate, low-quality, and malformed data and refines it into a dataset suitable for training
 - **Automatic base-model recommendation**: Recommends and compares suitable base models considering multiple factors such as purpose, data scale, and local resources
 - **Automatic hyperparameter tuning**: Automatically recommends and adjusts settings such as LoRA/QLoRA, epochs, and learning rate to match the training objective and evaluation results
-- **Natural-language pipeline orchestration**: Analyzes the user's objective to automatically plan a 9-stage LLMOps pipeline and execute it step by step
+- **Natural-language pipeline orchestration**: Analyzes the user's objective to automatically plan a 10-stage LLMOps pipeline and execute it step by step
 
 <table>
 <tr>
@@ -151,7 +172,8 @@ The initial build takes 10–20 minutes to install dependencies. Once complete, 
 | 6. Model Training           | Automatically perform LoRA/QLoRA-based fine-tuning       |
 | 7. Training Result Review   | Visualize learning curves and loss results              |
 | 8. Model Evaluation         | Evaluate using BLEU, ROUGE, Perplexity, and LLM Judge   |
-| 9. Chat Test                | Chat-test the tuned model right away                    |
+| 9. RAG DB Management        | Build and manage a document-based vector DB             |
+| 10. Chat Test               | Chat-test the tuned model and RAG DB right away         |
 
 ---
 

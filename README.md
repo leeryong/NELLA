@@ -19,6 +19,12 @@
 
 ## 🆕 최신 소식 (Latest News)
 
+> ### 🪟 이제 **Windows 설치 파일**로 바로 설치하세요!
+>
+> Docker 없이도 **NELLA**를 쓸 수 있습니다. 설치 파일을 내려받아 실행하면 끝 — Python·Node.js·Docker 설정이 필요 없습니다.
+>
+> ➡️ **[NELLA Windows 설치 파일 내려받기](https://github.com/leeryong/NELLA/releases/latest)** (Windows 10/11 64비트)
+
 > ### 🌐 이제 **TAW**에서 에이전트로 만나요!
 >
 > **NELLA** — 이제 **[The Agents Web (TAW)](https://github.com/leeryong/The_Agents_Web_TAW/blob/main/README.ko.md)** 플랫폼에서 **에이전트**로 만날 수 있습니다!
@@ -66,7 +72,22 @@
 
 ## 🛠️ 설치 방법
 
-NELLA 설치에 필요한 모든 구성 요소는 Docker 컨테이너로 제공됩니다. 별도의 Python 또는 Node.js 환경 설정 없이 Docker만 설치되어 있다면, 아래 명령 몇 줄만으로 NELLA를 바로 실행할 수 있습니다.
+두 가지 방법 중 하나를 선택하세요. **Windows 사용자는 설치 파일 방식을 권장합니다.**
+
+### 방법 1 — Windows 설치 파일 (권장)
+
+Docker도, Python도 필요 없습니다. 설치 파일 하나만 받아 실행하면 됩니다.
+
+1. **[릴리스 페이지](https://github.com/leeryong/NELLA/releases/latest)** 에서 `NELLA-Setup-0.1.0.exe` 를 내려받습니다
+2. 내려받은 파일을 실행합니다 (관리자 권한 불필요 — 사용자 폴더에 설치됩니다)
+3. 바탕화면의 **NELLA** 아이콘으로 실행합니다
+
+- **요구 사항**: Windows 10/11 64비트
+- **GPU 학습**: 기본은 CPU 모드입니다. NVIDIA GPU가 있다면 앱의 *설정 → GPU 학습 기능 설치* 버튼으로 CUDA 학습 스택을 추가할 수 있습니다 (다운로드 약 3GB, 설치 후 약 8GB 필요). 설치 후 앱을 재시작하면 GPU가 활성화됩니다.
+
+### 방법 2 — Docker (Windows · macOS · Linux)
+
+NELLA 실행에 필요한 모든 구성 요소가 Docker 컨테이너로 제공됩니다. 별도의 Python 또는 Node.js 환경 설정 없이 Docker만 설치되어 있다면, 아래 명령 몇 줄만으로 실행할 수 있습니다.
 
 ```bash
 git clone https://github.com/leeryong/NELLA.git
@@ -85,7 +106,7 @@ docker compose up -d --build
 - **데이터 품질 검증**: 중복, 품질 저하, 형식 오류 데이터를 검토하여 학습에 적합한 데이터셋으로 정제
 - **기반 모델 자동 추천**: 사용 목적, 데이터 규모, 로컬 자원 등 여러 조건을 고려해 적합한 기반 모델 추천 및 비교
 - **하이퍼파라미터 자동 조정**: LoRA/QLoRA, epoch, learning rate 등 설정을 학습 목적과 평가 결과에 맞게 자동 추천 및 조정
-- **자연어 기반 파이프라인 오케스트레이션**: 사용자의 목적을 분석해 9단계 LLMOps 파이프라인을 자동 계획하고 단계별 실행
+- **자연어 기반 파이프라인 오케스트레이션**: 사용자의 목적을 분석해 10단계 LLMOps 파이프라인을 자동 계획하고 단계별 실행
 
 <table>
 <tr>
@@ -152,7 +173,8 @@ docker compose up -d --build
 | 6. 모델 훈련     | LoRA/QLoRA 기반 파인튜닝 자동 수행                 |
 | 7. 훈련 결과 확인  | 학습 곡선 및 손실 결과 시각화                        |
 | 8. 모델 평가     | BLEU, ROUGE, Perplexity, LLM Judge 기반 평가 |
-| 9. 대화 테스트    | 튜닝된 모델과 즉시 대화 테스트                        |
+| 9. RAG DB 관리  | 문서 기반 벡터DB 생성 및 관리                       |
+| 10. 대화 테스트   | 튜닝된 모델·RAG DB와 즉시 대화 테스트                  |
 
 ---
 
