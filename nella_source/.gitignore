@@ -7,8 +7,11 @@ venv/
 # Env / secrets — never commit real keys
 .env
 *.env.local
-# Runtime data (created at run time by the ./data volume)
-data/
+# Runtime data (created at run time by the ./data volume).
+# Anchored with a leading slash: a bare `data/` also matched
+# frontend/src/data/, which silently dropped the guide/help content and
+# left a fresh clone unable to build.
+/data/
 # Node / frontend build output
 node_modules/
 frontend/dist/

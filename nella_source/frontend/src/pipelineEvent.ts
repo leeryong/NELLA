@@ -36,6 +36,22 @@ export function subscribePipelineEvents(
   return () => window.removeEventListener(EVENT_NAME, listener);
 }
 
+const LLM_SETTINGS_EVENT_NAME = "nella-llm-settings-changed";
+
+/**
+ * LLM 설정(공급자/모델/API 키)이 저장됐음을 알립니다.
+ * AgentChat은 부팅 시 한 번만 공급자 정보를 읽으므로, 이 이벤트가 없으면
+ * 저장 후에도 헤더의 모델명이 예전 값으로 남습니다.
+ */
+export function emitLlmSettingsChanged(): void {
+  window.dispatchEvent(new CustomEvent(LLM_SETTINGS_EVENT_NAME));
+}
+
+export function subscribeLlmSettingsChanged(handler: () => void): () => void {
+  window.addEventListener(LLM_SETTINGS_EVENT_NAME, handler);
+  return () => window.removeEventListener(LLM_SETTINGS_EVENT_NAME, handler);
+}
+
 export function emitDocumentUploadEvent(event: DocumentUploadEvent): void {
   window.dispatchEvent(new CustomEvent(DOCUMENT_UPLOAD_EVENT_NAME, { detail: event }));
 }

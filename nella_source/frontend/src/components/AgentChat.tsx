@@ -9,8 +9,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Bot, User, Send, Loader, ChevronRight, RotateCcw, Terminal, GripVertical, CheckCircle, XCircle, Square, Trash2, RefreshCw, Paperclip, X as XIcon, ExternalLink, Copy, Check, FileText, Settings, ChevronUp, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { chatApi, api, trainingApi, modelsApi, documentsApi, agentMessagesApi } from "../services/api";
-import { emitDocumentUploadEvent, emitPipelineEvent, subscribePipelineEvents } from "../pipelineEvent";
+import { chatApi, api, trainingApi, modelsApi, documentsApi, agentMessagesApi, settingsApi } from "../services/api";
+import { emitDocumentUploadEvent, emitPipelineEvent, subscribePipelineEvents, subscribeLlmSettingsChanged, emitLlmSettingsChanged } from "../pipelineEvent";
 import { useProviderModels } from "../hooks/useProviderModels";
 import imgWorking    from "../assets/Figures/states/working.png";
 import imgResting    from "../assets/Figures/states/resting.png";
@@ -687,6 +687,24 @@ const AgentChat: React.FC<AgentChatProps> = ({ collapsed, onToggle }) => {
     })();
   };
 
+  // LLM 설정 저장 시 공급자 정보를 다시 읽어 헤더의 모델명을 갱신합니다.
+  // (부팅 setup()에서만 읽으면 저장 후에도 예전 모델명이 그대로 남습니다.)
+  useEffect(() => {
+    return subscribeLlmSettingsChanged(async () => {
+      try {
+        const { data: p } = await api.get<ProviderInfo>("/settings/available-providers");
+        setProviderInfo(p);
+        // 사용자가 고른 공급자는 유지하고, 그 공급자의 모델명만 새로 반영합니다.
+        const next =
+          mode === "openai" ? p.openai_model
+          : mode === "anthropic" ? p.anthropic_model
+          : mode === "ollama" ? p.ollama_model
+          : "";
+        if (next) setProviderModel(next);
+      } catch { /* 갱신 실패는 무시 — 다음 부팅에서 반영됩니다 */ }
+    });
+  }, [mode]);
+
   useEffect(() => {
     if (!sending && !backgroundWait) { setLoadingStageIdx(0); return; }
     const t = setInterval(() => setLoadingStageIdx(i => (i + 1) % LOADING_STAGES.length), 2200);
@@ -791,6 +809,22 @@ const AgentChat: React.FC<AgentChatProps> = ({ collapsed, onToggle }) => {
     else if (newMode === "ollama") { setProviderModel(providerInfo.ollama_model); setModelReady(true); }
     addTerminalLog("info", `프로바이더 변경: ${PROVIDER_LABELS[newMode]}`);
   };
+
+  // 어시스턴트에서 모델을 바꾸면 LLM 설정 화면과 같은 값을 쓰도록 서버에 저장하고
+  // 알립니다. (예전에는 이 select가 로컬 state만 바꿔서 두 화면이 따로 놀았습니다.)
+  const persistProviderModel = useCallback(async (value: string) => {
+    if (!value || mode === "local") return;
+    const field =
+      mode === "openai" ? "openai_model"
+      : mode === "anthropic" ? "anthropic_model"
+      : "ollama_model";
+    try {
+      await settingsApi.update({ [field]: value });
+      emitLlmSettingsChanged();
+    } catch {
+      addTerminalLog("error", `모델 설정 저장 실패: ${value}`);
+    }
+  }, [mode, addTerminalLog]);
 
   const loadLocalModel = async (path: string, name: string) => {
     if (!path) return;
@@ -1790,7 +1824,8 @@ const AgentChat: React.FC<AgentChatProps> = ({ collapsed, onToggle }) => {
                   <div>
                     <p className="text-xs font-semibold text-gray-700 mb-2">모델</p>
                     {mode !== "ollama" && presetModels.length > 0 ? (
-                      <select value={providerModel} onChange={e => setProviderModel(e.target.value)}
+                      <select value={providerModel}
+                        onChange={e => { setProviderModel(e.target.value); persistProviderModel(e.target.value); }}
                         className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
                         {/* 저장된 모델이 목록에 없으면(예: chat 미지원이라 걸러진 모델)
                             select가 첫 항목을 보여주면서 state에는 예전 값이 남습니다. */}
@@ -1800,7 +1835,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ collapsed, onToggle }) => {
                         {presetModels.map((m: string) => <option key={m} value={m}>{m}</option>)}
                       </select>
                     ) : (
-                      <input type="text" value={providerModel} onChange={e => setProviderModel(e.target.value)}
+                      // 자유 입력은 타이핑마다 저장하지 않도록 포커스가 빠질 때 반영합니다.
+                      <input type="text" value={providerModel}
+                        onChange={e => setProviderModel(e.target.value)}
+                        onBlur={e => persistProviderModel(e.target.value)}
                         placeholder="모델명 입력..."
                         className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
                     )}

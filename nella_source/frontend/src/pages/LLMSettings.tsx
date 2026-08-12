@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { settingsApi } from "../services/api";
 import PageHelp from "../components/PageHelp";
-import { DEFAULT_MODELS } from "../constants/models";
+import { DEFAULT_MODELS, OLLAMA_MODEL_PLACEHOLDER } from "../constants/models";
+import { emitLlmSettingsChanged, subscribeLlmSettingsChanged } from "../pipelineEvent";
 import { useProviderModels } from "../hooks/useProviderModels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ const OllamaModelSelect: React.FC<{
           <input
             type="text"
             value={value}
-            placeholder="예: llama3.2, qwen2.5:7b"
+            placeholder={OLLAMA_MODEL_PLACEHOLDER}
             onChange={(e) => onChange(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -381,6 +382,21 @@ const LLMSettings: React.FC = () => {
   const [defaultProvider, setDefaultProvider] = useState("openai");
   const [openaiConfigured, setOpenaiConfigured] = useState(false);
   const [anthropicConfigured, setAnthropicConfigured] = useState(false);
+  // 어시스턴트 패널에서 모델을 바꿔도 이 화면이 같은 값을 보여주도록 따라갑니다.
+  // 모델명만 새로 읽습니다 — 아직 저장 안 한 API 키·Base URL 입력을 덮어쓰지 않도록.
+  useEffect(() => {
+    return subscribeLlmSettingsChanged(async () => {
+      try {
+        const { data } = await settingsApi.get();
+        const s = data as { llm_provider: string; openai_model: string; anthropic_model: string; ollama_model: string };
+        setDefaultProvider(s.llm_provider || "openai");
+        if (s.openai_model) setOpenai((p) => (p.model === s.openai_model ? p : { ...p, model: s.openai_model }));
+        if (s.anthropic_model) setAnthropic((p) => (p.model === s.anthropic_model ? p : { ...p, model: s.anthropic_model }));
+        if (s.ollama_model) setOllama((p) => (p.model === s.ollama_model ? p : { ...p, model: s.ollama_model }));
+      } catch { /* 갱신 실패는 무시 — 다음 진입에서 반영됩니다 */ }
+    });
+  }, []);
+
   // Model choices come from the provider, not a hardcoded list. Refetched once
   // a key is saved, since that's when the provider will answer for real.
   const openaiModels = useProviderModels("openai", undefined, openaiConfigured);
@@ -431,7 +447,7 @@ const LLMSettings: React.FC = () => {
         setOllama((p) => ({
           ...p,
           baseUrl: s.ollama_base_url || "http://localhost:11434",
-          model: s.ollama_model || "llama3.2",
+          model: s.ollama_model || DEFAULT_MODELS.ollama,
         }));
       })
       .catch(() => {})
@@ -517,6 +533,9 @@ const LLMSettings: React.FC = () => {
       if (provider === "openai" && state.apiKey) setOpenaiConfigured(true);
       if (provider === "anthropic" && state.apiKey) setAnthropicConfigured(true);
       setState((p) => ({ ...p, saving: false, dirty: false, apiKey: "" }));
+      // AgentChat은 부팅 시 한 번만 공급자 정보를 읽으므로, 알려주지 않으면
+      // 우측 패널 헤더의 모델명이 저장 전 값으로 남습니다.
+      emitLlmSettingsChanged();
       setGlobalSaveMsg("설정이 저장되었습니다.");
       setTimeout(() => setGlobalSaveMsg(null), 3000);
     } catch (e: unknown) {
