@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { chatApi, api, trainingApi, modelsApi, documentsApi, agentMessagesApi } from "../services/api";
 import { emitDocumentUploadEvent, emitPipelineEvent, subscribePipelineEvents } from "../pipelineEvent";
+import { useProviderModels } from "../hooks/useProviderModels";
 import imgWorking    from "../assets/Figures/states/working.png";
 import imgResting    from "../assets/Figures/states/resting.png";
 import imgDozing     from "../assets/Figures/states/dozing.png";
@@ -108,10 +109,6 @@ const PROVIDER_LABELS: Record<ProviderMode, string> = {
   local: "로컬",
 };
 
-const PRESET_MODELS: Record<string, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
-  anthropic: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"],
-};
 
 const PAGE_LABELS: Record<string, string> = {
   "/": "대시보드", "/documents": "문서 업로드", "/data": "학습데이터 생성",
@@ -307,6 +304,8 @@ const AgentChat: React.FC<AgentChatProps> = ({ collapsed, onToggle }) => {
   // Provider / model
   const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
   const [mode, setMode] = useState<ProviderMode>("anthropic");
+  // Live model list for the selected provider (see constants/models.ts).
+  const { models: presetModels } = useProviderModels(mode);
   const [providerModel, setProviderModel] = useState("");
   const [localModels, setLocalModels] = useState<Array<{ path: string; name: string }>>([]);
   const [localModelPath, setLocalModelPath] = useState("");
@@ -1790,10 +1789,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ collapsed, onToggle }) => {
                 {mode !== "local" && (
                   <div>
                     <p className="text-xs font-semibold text-gray-700 mb-2">모델</p>
-                    {mode !== "ollama" && PRESET_MODELS[mode]?.length > 0 ? (
+                    {mode !== "ollama" && presetModels.length > 0 ? (
                       <select value={providerModel} onChange={e => setProviderModel(e.target.value)}
                         className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                        {PRESET_MODELS[mode].map(m => <option key={m} value={m}>{m}</option>)}
+                        {/* 저장된 모델이 목록에 없으면(예: chat 미지원이라 걸러진 모델)
+                            select가 첫 항목을 보여주면서 state에는 예전 값이 남습니다. */}
+                        {providerModel && !presetModels.includes(providerModel) && (
+                          <option value={providerModel}>{providerModel} (사용 불가 — 변경 필요)</option>
+                        )}
+                        {presetModels.map((m: string) => <option key={m} value={m}>{m}</option>)}
                       </select>
                     ) : (
                       <input type="text" value={providerModel} onChange={e => setProviderModel(e.target.value)}

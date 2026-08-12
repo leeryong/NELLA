@@ -3,6 +3,7 @@ Settings API - read and update runtime configuration.
 Writes changes to the .env file so they persist across restarts.
 """
 import platform
+import re
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -398,6 +399,116 @@ async def get_ollama_models(base_url: Optional[str] = None):
     except Exception as e:
         raise HTTPException(400, detail=str(e))
 
+
+# Shown when a provider's model list can't be fetched (no API key yet, or the
+# call failed). Hardcoding a list is what left retired IDs like
+# claude-3-5-sonnet-20241022 in the UI for months — picking one returned a 404
+# that looked like a bad API key. Keep this short and current; the live list
+# below is the real source of truth.
+FALLBACK_PROVIDER_MODELS = {
+    "anthropic": [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-haiku-4-5",
+        "claude-opus-4-8",
+        "claude-sonnet-4-6",
+    ],
+    "openai": [
+        "gpt-4o",
+        "gpt-4o-mini",
+    ],
+}
+
+# Model families on OpenAI's /v1/models that can't serve chat completions.
+# /v1/models lists every model the key can see, including many that 404 on
+# /v1/chat/completions ("This is not a chat model..."). Picking one of those in
+# the UI made every LLM call fail with no obvious cause, so filter them out.
+# Probed against a live key — see _is_openai_chat_model:
+#   -pro / -codex → Responses API only        -instruct → legacy completions API
+#   audio/realtime/transcribe/tts/image → reject plain-text chat
+# Search models (gpt-5-search-api, gpt-4o-search-preview) DO answer on chat
+# completions, so they are deliberately kept.
+_OPENAI_NON_CHAT_PREFIXES = (
+    "text-embedding", "tts-", "whisper", "dall-e", "omni-moderation",
+    "text-moderation", "babbage", "davinci", "gpt-image", "sora",
+    "chatgpt-image", "gpt-audio", "gpt-realtime", "gpt-live-", "gpt-transcribe",
+    "codex-",
+)
+_OPENAI_NON_CHAT_MARKERS = (
+    "-codex", "-instruct", "-transcribe", "-tts", "-audio", "-realtime", "-image",
+)
+# "gpt-5.4-pro", "o1-pro", "gpt-5.5-pro-2026-04-23" — always Responses-only.
+_OPENAI_PRO_SUFFIX = re.compile(r"-pro(-\d{4}-\d{2}-\d{2})?$")
+
+
+def _is_openai_chat_model(model_id: str) -> bool:
+    """True if the model can be used with /v1/chat/completions."""
+    m = model_id.lower()
+    if m.startswith(_OPENAI_NON_CHAT_PREFIXES):
+        return False
+    if any(marker in m for marker in _OPENAI_NON_CHAT_MARKERS):
+        return False
+    return not _OPENAI_PRO_SUFFIX.search(m)
+
+
+@router.get("/provider-models")
+async def get_provider_models(provider: str, api_key: Optional[str] = None):
+    """
+    List the chat models a provider actually offers, using the caller's key.
+
+    Fetched live rather than hardcoded so retired model IDs can't linger in the
+    picker. Always returns 200: on any failure it falls back to a curated list
+    and reports why in `source`/`detail`, so the settings page stays usable
+    before a key has been entered.
+    """
+    import httpx
+
+    provider = provider.lower()
+    if provider not in FALLBACK_PROVIDER_MODELS:
+        raise HTTPException(400, detail=f"Unknown provider: {provider}")
+
+    fallback = FALLBACK_PROVIDER_MODELS[provider]
+    key = api_key or (
+        settings.OPENAI_API_KEY if provider == "openai" else settings.ANTHROPIC_API_KEY
+    )
+    if not key:
+        return {"status": "success", "provider": provider, "models": fallback,
+                "source": "fallback", "detail": "API 키가 없어 기본 목록을 표시합니다."}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            if provider == "openai":
+                base = (settings.OPENAI_BASE_URL or "https://api.openai.com/v1").rstrip("/")
+                resp = await client.get(
+                    f"{base}/models", headers={"Authorization": f"Bearer {key}"}
+                )
+                resp.raise_for_status()
+                models = sorted(
+                    m["id"] for m in resp.json().get("data", [])
+                    if _is_openai_chat_model(m["id"])
+                )
+            else:
+                resp = await client.get(
+                    "https://api.anthropic.com/v1/models",
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                )
+                resp.raise_for_status()
+                # Newest first — the API returns them in that order already.
+                models = [m["id"] for m in resp.json().get("data", [])]
+
+        if not models:
+            return {"status": "success", "provider": provider, "models": fallback,
+                    "source": "fallback", "detail": "공급자가 빈 목록을 반환했습니다."}
+        return {"status": "success", "provider": provider, "models": models, "source": "live"}
+    except httpx.HTTPStatusError as e:
+        detail = ("API 키가 유효하지 않습니다." if e.response.status_code in (401, 403)
+                  else f"공급자 응답 오류 (HTTP {e.response.status_code})")
+        return {"status": "success", "provider": provider, "models": fallback,
+                "source": "fallback", "detail": detail}
+    except Exception as e:
+        logger.warning(f"Could not fetch {provider} model list: {e}")
+        return {"status": "success", "provider": provider, "models": fallback,
+                "source": "fallback", "detail": f"목록을 가져오지 못했습니다: {e}"}
 
 @router.post("/reset")
 async def reset_all_data():

@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { settingsApi } from "../services/api";
 import PageHelp from "../components/PageHelp";
+import { DEFAULT_MODELS } from "../constants/models";
+import { useProviderModels } from "../hooks/useProviderModels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -167,6 +169,8 @@ interface ProviderCardProps {
   modelPlaceholder?: string;
   baseUrlPlaceholder?: string;
   modelOptions?: string[];
+  modelsLoading?: boolean;
+  modelsDetail?: string;
 }
 
 const ProviderCard: React.FC<ProviderCardProps> = ({
@@ -190,6 +194,8 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   modelPlaceholder,
   baseUrlPlaceholder,
   modelOptions,
+  modelsLoading,
+  modelsDetail,
 }) => {
   return (
     <div
@@ -284,6 +290,12 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
                 }
                 className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
+                {/* 저장된 모델이 목록에 없을 때(예: chat 미지원이라 걸러진 모델)
+                    옵션을 안 만들면 select는 첫 항목을 보여주면서 state에는 예전
+                    값이 남아, 저장을 눌러도 못 쓰는 모델이 그대로 다시 저장됩니다. */}
+                {state.model && !modelOptions.includes(state.model) && (
+                  <option value={state.model}>{state.model} (사용 불가 — 변경 필요)</option>
+                )}
                 {modelOptions.map((m) => (
                   <option key={m} value={m}>
                     {m}
@@ -302,6 +314,24 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
               }
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          )}
+          {/* 목록 조회 상태를 반드시 노출합니다. 표시가 없으면 조회가 실패해도
+              폴백 2개(gpt-4o / gpt-4o-mini)만 떠서 원인을 알 수 없습니다. */}
+          {provider !== "ollama" && modelsLoading && (
+            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              모델 목록을 불러오는 중...
+            </p>
+          )}
+          {provider !== "ollama" && !modelsLoading && modelsDetail && (
+            <p className="text-xs text-amber-600 mt-1">
+              ⚠ {modelsDetail} — 아래는 기본 목록입니다.
+            </p>
+          )}
+          {provider !== "ollama" && !modelsLoading && !modelsDetail && modelOptions && (
+            <p className="text-xs text-gray-400 mt-1">
+              공급자에서 받은 모델 {modelOptions.length}개
+            </p>
           )}
         </div>
       </div>
@@ -346,25 +376,15 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const OPENAI_MODELS = [
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gpt-4-turbo",
-  "gpt-4",
-  "gpt-3.5-turbo",
-];
-const ANTHROPIC_MODELS = [
-  "claude-opus-4-6",
-  "claude-sonnet-4-6",
-  "claude-haiku-4-5-20251001",
-  "claude-3-5-sonnet-20241022",
-  "claude-3-5-haiku-20241022",
-];
 
 const LLMSettings: React.FC = () => {
   const [defaultProvider, setDefaultProvider] = useState("openai");
   const [openaiConfigured, setOpenaiConfigured] = useState(false);
   const [anthropicConfigured, setAnthropicConfigured] = useState(false);
+  // Model choices come from the provider, not a hardcoded list. Refetched once
+  // a key is saved, since that's when the provider will answer for real.
+  const openaiModels = useProviderModels("openai", undefined, openaiConfigured);
+  const anthropicModels = useProviderModels("anthropic", undefined, anthropicConfigured);
   const [loading, setLoading] = useState(true);
   const [globalSaveMsg, setGlobalSaveMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Provider>("openai");
@@ -401,12 +421,12 @@ const LLMSettings: React.FC = () => {
         if (s.anthropic_api_key_masked) setAnthropicKeyMasked(s.anthropic_api_key_masked);
         setOpenai((p) => ({
           ...p,
-          model: s.openai_model || "gpt-4o-mini",
+          model: s.openai_model || DEFAULT_MODELS.openai,
           baseUrl: s.openai_base_url || "",
         }));
         setAnthropic((p) => ({
           ...p,
-          model: s.anthropic_model || "claude-sonnet-4-6",
+          model: s.anthropic_model || DEFAULT_MODELS.anthropic,
         }));
         setOllama((p) => ({
           ...p,
@@ -613,7 +633,9 @@ const LLMSettings: React.FC = () => {
               showBaseUrl
               apiKeyPlaceholder={openaiKeyMasked}
               baseUrlPlaceholder="(비워두면 OpenAI 기본 URL 사용)"
-              modelOptions={OPENAI_MODELS}
+              modelOptions={openaiModels.models}
+              modelsLoading={openaiModels.loading}
+              modelsDetail={openaiModels.detail}
             />
           )}
           {activeTab === "anthropic" && (
@@ -632,7 +654,9 @@ const LLMSettings: React.FC = () => {
               showApiKey
               showBaseUrl={false}
               apiKeyPlaceholder={anthropicKeyMasked}
-              modelOptions={ANTHROPIC_MODELS}
+              modelOptions={anthropicModels.models}
+              modelsLoading={anthropicModels.loading}
+              modelsDetail={anthropicModels.detail}
             />
           )}
           {activeTab === "ollama" && (

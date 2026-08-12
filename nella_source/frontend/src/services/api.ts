@@ -787,6 +787,19 @@ export const settingsApi = {
     api.get<{ status: string; models: string[]; base_url: string }>("/settings/ollama-models", {
       params: baseUrl ? { base_url: baseUrl } : {},
     }),
+  // Live model list from the provider. Always 200 — falls back to a curated
+  // list (source: "fallback") with `detail` explaining why, rather than erroring.
+  getProviderModels: (provider: string, apiKey?: string) =>
+    api.get<{
+      status: string;
+      provider: string;
+      models: string[];
+      source: "live" | "fallback";
+      detail?: string;
+    }>("/settings/provider-models", {
+      params: { provider, ...(apiKey ? { api_key: apiKey } : {}) },
+    }),
+
 };
 
 export const statusApi = {

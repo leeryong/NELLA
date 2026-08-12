@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useProviderModels } from "../hooks/useProviderModels";
 import { MessageSquare, X, Minus, Bot, User, Send, Loader } from "lucide-react";
 import { chatApi, api, trainingApi, modelsApi } from "../services/api";
 
@@ -27,10 +28,6 @@ const PROVIDER_LABELS: Record<ProviderMode, string> = {
   local: "로컬 모델",
 };
 
-const PRESET_MODELS: Record<string, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
-  anthropic: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-3-5-haiku-20241022"],
-};
 
 const FloatingChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,6 +36,8 @@ const FloatingChat: React.FC = () => {
   // Provider / model state
   const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
   const [mode, setMode] = useState<ProviderMode>("openai");
+  // Live model list for the selected provider (see constants/models.ts).
+  const { models: presetModels } = useProviderModels(mode);
   const [providerModel, setProviderModel] = useState("");
   const [localModels, setLocalModels] = useState<Array<{ path: string; name: string }>>([]);
   const [localModelPath, setLocalModelPath] = useState("");
@@ -284,13 +283,13 @@ const FloatingChat: React.FC = () => {
                 </div>
 
                 {/* Model selector for preset-model providers */}
-                {mode !== "local" && mode !== "ollama" && PRESET_MODELS[mode]?.length > 0 && (
+                {mode !== "local" && mode !== "ollama" && presetModels.length > 0 && (
                   <select
                     value={providerModel}
                     onChange={(e) => setProviderModel(e.target.value)}
                     className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
                   >
-                    {PRESET_MODELS[mode].map((m) => (
+                    {presetModels.map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>

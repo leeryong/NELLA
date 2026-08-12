@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useProviderModels } from "../hooks/useProviderModels";
 import { useAgentPolling } from "../hooks/useAgentPolling";
 import { useAgentToolResult } from "../hooks/useAgentToolResult";
 import { MessageSquare } from "lucide-react";
@@ -18,11 +19,6 @@ interface AvailableProviders {
   openai_model: string; anthropic_model: string; ollama_model: string;
 }
 
-const PROVIDER_MODELS: Record<string, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-  anthropic: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-7"],
-  ollama: [],
-};
 
 // ── Chat page ──────────────────────────────────────────
 const Chat: React.FC = () => {
@@ -277,7 +273,7 @@ const Chat: React.FC = () => {
     ? selectedModelName
     : `${enabledProviders.find((p) => p.value === mode)?.label ?? mode} / ${providerModel}`;
 
-  const modelOptions = PROVIDER_MODELS[mode] || [];
+  const { models: modelOptions } = useProviderModels(mode);
 
   return (
     /* 전체 페이지: 뷰포트 높이, flex-col */
