@@ -133,7 +133,7 @@ class InferenceService:
                 config_path = Path(model_path) / "config.json"
                 model_config = {}
                 if config_path.exists():
-                    with open(config_path) as f:
+                    with open(config_path, encoding="utf-8") as f:
                         model_config = json.load(f)
 
                 quant_config = model_config.get("quantization_config", {})
@@ -175,7 +175,7 @@ class InferenceService:
                 peft_config_path = Path(model_path) / "adapter_config.json"
                 if peft_config_path.exists():
                     from peft import PeftModel
-                    with open(peft_config_path) as f:
+                    with open(peft_config_path, encoding="utf-8") as f:
                         peft_config = json.load(f)
                     base_model_id = peft_config.get("base_model_name_or_path", model_path)
 

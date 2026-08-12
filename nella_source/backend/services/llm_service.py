@@ -101,6 +101,29 @@ class LLMProvider(ABC):
         pass
 
 
+_JSON_ARRAY_WRAPPER_INSTRUCTION = (
+    "\n\nOUTPUT FORMAT: Return a single JSON object with exactly one key "
+    '"items", whose value is the JSON array described above — '
+    '{"items": [ ... ]}. Do not return a bare object for a single element; '
+    '"items" must always be an array, even when it holds one entry.'
+)
+
+
+def _with_json_array_wrapper(messages: list[dict]) -> list[dict]:
+    """Copy of *messages* whose system prompt also asks for an {"items": [...]}
+    wrapper, so OpenAI's json_object mode can't collapse an array into one object.
+
+    Appends to the first system message when there is one (models weight the
+    system prompt for format rules); otherwise prepends a new system message.
+    """
+    out = [dict(m) for m in messages]
+    for m in out:
+        if m.get("role") == "system":
+            m["content"] = f"{m.get('content', '')}{_JSON_ARRAY_WRAPPER_INSTRUCTION}"
+            return out
+    return [{"role": "system", "content": _JSON_ARRAY_WRAPPER_INSTRUCTION.strip()}] + out
+
+
 def _openai_token_kwargs(model: str, max_tokens: int, temperature: float) -> dict:
     """Build model-appropriate OpenAI chat params.
 
@@ -153,11 +176,20 @@ class OpenAIProvider(LLMProvider):
         async with _llm_semaphore:
             client = self._get_client()
             # json_mode=True → OpenAI JSON 모드 활성화 (response_format)
-            # JSON 모드는 프롬프트에 "json" 단어가 포함되어야 동작하므로 안전 확인
-            if kwargs.pop("json_mode", False):
-                prompt_text = " ".join(m.get("content", "") for m in messages).lower()
-                if "json" in prompt_text and "response_format" not in kwargs:
-                    kwargs["response_format"] = {"type": "json_object"}
+            #
+            # OpenAI's json_object mode requires the top-level value to be an
+            # OBJECT, but every json_mode caller here asks for an ARRAY of pairs.
+            # Left alone the model complies with response_format and returns a
+            # single {"question": ..., "answer": ...} object; _parse_json_array
+            # then finds no list and returns [], so every chunk yields zero pairs
+            # and generation fails with "Failed to generate any QA pairs".
+            # (Anthropic never saw this — it ignores **kwargs entirely.)
+            # Asking for a one-key wrapper keeps json mode's benefit (no markdown
+            # fences) while preserving the array: _parse_json_array already
+            # unwraps the first list value it finds in an object.
+            if kwargs.pop("json_mode", False) and "response_format" not in kwargs:
+                kwargs["response_format"] = {"type": "json_object"}
+                messages = _with_json_array_wrapper(messages)
             response = await client.chat.completions.create(
                 model=self.model,
                 messages=messages,

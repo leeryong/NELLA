@@ -134,7 +134,7 @@ class ModelEvaluator:
         """Load test data from JSONL file."""
         data = []
         try:
-            with open(data_path) as f:
+            with open(data_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -186,7 +186,7 @@ class ModelEvaluator:
                 peft_config_path = Path(model_path) / "adapter_config.json"
                 if peft_config_path.exists():
                     from peft import PeftModel
-                    with open(peft_config_path) as f:
+                    with open(peft_config_path, encoding="utf-8") as f:
                         peft_cfg = _json.load(f)
                     base_model_id = peft_cfg.get("base_model_name_or_path", model_path)
                     if base_model_id and not Path(base_model_id).exists():

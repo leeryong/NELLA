@@ -209,8 +209,8 @@ async def lifespan(app: FastAPI):
                 test_file = candidate_dir / "test.jsonl"
                 if train_file.exists():
                     try:
-                        train_count = sum(1 for l in open(train_file) if l.strip())
-                        test_count = sum(1 for l in open(test_file) if l.strip()) if test_file.exists() else 0
+                        train_count = sum(1 for l in open(train_file, encoding="utf-8") if l.strip())
+                        test_count = sum(1 for l in open(test_file, encoding="utf-8") if l.strip()) if test_file.exists() else 0
                         ds.train_path = str(train_file)
                         ds.test_path = str(test_file) if test_file.exists() else None
                         ds.train_count = train_count
@@ -236,8 +236,8 @@ async def lifespan(app: FastAPI):
                         continue
                     try:
                         test_file = dataset_dir / "test.jsonl"
-                        train_count = sum(1 for l in open(train_file) if l.strip())
-                        test_count = sum(1 for l in open(test_file) if l.strip()) if test_file.exists() else 0
+                        train_count = sum(1 for l in open(train_file, encoding="utf-8") if l.strip())
+                        test_count = sum(1 for l in open(test_file, encoding="utf-8") if l.strip()) if test_file.exists() else 0
 
                         # Detect data_type from first record
                         data_type = "sft"

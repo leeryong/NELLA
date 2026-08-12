@@ -91,7 +91,12 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = BASE_DIR / ".env"
-        env_file_encoding = "utf-8"
+        # utf-8-sig, not utf-8: Notepad and PowerShell's Set-Content write UTF-8
+        # *with* a BOM, and a BOM makes the first key parse as "﻿OPENAI_API_KEY",
+        # which trips case_sensitive/extra-forbidden and kills startup with a
+        # cryptic "Extra inputs are not permitted". utf-8-sig strips a BOM when
+        # present and reads plain UTF-8 unchanged.
+        env_file_encoding = "utf-8-sig"
         case_sensitive = True
 
     def model_post_init(self, __context) -> None:

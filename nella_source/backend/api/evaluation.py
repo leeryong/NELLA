@@ -113,7 +113,7 @@ async def run_evaluation(
         except Exception as e:
             _eval_progress[eval_id] = {"pct": 0, "step": f"오류: {str(e)[:80]}", "done": True, "error": True}
             logger.error(f"Evaluation failed: {e}\n{_tb.format_exc()}")
-            with open("/tmp/eval-error.log", "a") as _f:
+            with open("/tmp/eval-error.log", "a", encoding="utf-8") as _f:
                 _f.write(f"eval_id={eval_id} error: {e}\n{_tb.format_exc()}\n")
             async with AsyncSessionLocal() as session:
                 stmt = select(EvaluationResult).where(EvaluationResult.id == eval_id)
