@@ -1,0 +1,12 @@
+# Obfuscation tooling. Kept in the local working tree so the Linux .so files can
+# be rebuilt (see packaging/obfuscate/Dockerfile.build), but never published:
+# nella_source/ ships the compiled result, not the scripts that produce it.
+nella_source/packaging/
+
+# Runtime database that appears in local working trees; the app creates its own
+# under the mounted ./data volume.
+nella_source/backend/llmops.db
+
+# Python bytecode
+__pycache__/
+*.py[cod]
