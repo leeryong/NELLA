@@ -181,9 +181,9 @@ From uploading a document to chatting with the finished model, NELLA runs the st
 Work through them **screen by screen**, or hand the whole thing to the agent **in one request**.
 
 ```
-📄 Documents → 📝 Training data → 🔍 Validation → 🤖 Model choice → 🧪 Pre-check
-                                                                        ↓
-    💬 Chat test ← 📚 RAG DB ← 📊 Evaluation ← 📈 Results ← ⚙️ Training
+📄 Documents → 📝 Training data → 🔍 Validation → 🤖 Model choice
+   → 🧪 Pre-check → ⚙️ Training → 📈 Results → 📊 Evaluation
+   → 📚 RAG DB → 💬 Chat test
 ```
 
 | Stage | What it does | What it means |
