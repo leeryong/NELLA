@@ -267,6 +267,14 @@ docker compose up -d --build
 
 The initial build takes 10–20 minutes to install dependencies. Once complete, open [http://localhost:3001](http://localhost:3001) to start using NELLA right away.
 
+**To run on an NVIDIA GPU**, add the GPU overlay. Docker ships the CUDA libraries inside the image, but the GPU device itself has to be requested explicitly.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+The plain command above stays on CPU so it works on machines without a GPU. On Linux this needs the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html); Docker Desktop on Windows works through WSL2 with no extra install.
+
 <div align="right"><a href="#toc">▲ Back to contents</a></div>
 
 ---

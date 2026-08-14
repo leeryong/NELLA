@@ -267,6 +267,14 @@ docker compose up -d --build
 
 최초 빌드는 의존성 설치로 10~20분 걸리며, 완료 후 [http://localhost:3001](http://localhost:3001) 에 접속하여 바로 NELLA를 사용해볼 수 있습니다.
 
+**NVIDIA GPU로 실행하려면** 아래처럼 GPU 오버레이를 함께 지정하세요. Docker는 CUDA 라이브러리는 이미지에 담아 주지만 GPU 장치는 따로 열어 줘야 합니다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+기본 명령(위쪽)은 GPU가 없는 환경에서도 동작하도록 CPU 모드로 실행됩니다. Linux에서는 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)이 필요하고, Windows의 Docker Desktop은 WSL2를 통해 별도 설치 없이 동작합니다.
+
 <div align="right"><a href="#toc">▲ 목차로</a></div>
 
 ---

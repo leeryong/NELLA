@@ -1,0 +1,26 @@
+# GPU overlay for the backend.
+#
+# Docker hands a container the CUDA libraries baked into the image, but not the
+# GPU itself -- the device has to be requested explicitly. Without this file the
+# backend runs, reports "no GPU detected", and falls back to CPU.
+#
+# Kept separate from docker-compose.yml on purpose: asking for an nvidia device
+# makes `docker compose up` fail outright on machines that have no NVIDIA GPU
+# (Apple Silicon, GPU-less laptops and servers), and the default path has to
+# work for everyone.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# Requires an NVIDIA driver on the host, plus the NVIDIA Container Toolkit on
+# Linux. Docker Desktop on Windows works through WSL2 with no extra install.
+
+services:
+  backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
