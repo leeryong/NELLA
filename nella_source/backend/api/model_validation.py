@@ -33,6 +33,9 @@ _scout_cancelled: set[int] = set()
 
 
 class ScoutValidationRequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     # 단일/다중 데이터셋 모두 허용. dataset_ids가 비면 dataset_id에서 보충.
     dataset_id: Optional[int] = None
     dataset_ids: list[int] = Field(default_factory=list)

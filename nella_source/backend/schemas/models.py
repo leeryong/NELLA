@@ -138,6 +138,9 @@ class ModelInfo(BaseModel):
 
 
 class DownloadModelRequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     model_id: str
 
 
@@ -161,6 +164,9 @@ class ModelRecordResponse(BaseModel):
 
 # Training Job schemas
 class StartSFTRequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     name: str = Field(default="Training Job")
     dataset_id: Optional[int] = None             # legacy single-dataset field
     dataset_ids: list[int] = Field(default=[])  # multiple datasets (merged before training)
@@ -187,6 +193,9 @@ class StartSFTRequest(BaseModel):
 
 
 class StartDPORequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     name: str = Field(default="DPO Training Job")
     dataset_id: Optional[int] = None
     dataset_ids: list[int] = Field(default=[])
@@ -207,6 +216,9 @@ class StartDPORequest(BaseModel):
 
 
 class StartAutoResearchRequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     name: str = Field(default="AutoResearch Job")
     dataset_id: Optional[int] = None
     dataset_ids: list[int] = Field(default=[])
@@ -270,6 +282,8 @@ class EvaluationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        # model_path is a domain term here, not pydantic's protected namespace.
+        protected_namespaces = ()
 
 
 # Chat schemas
@@ -279,6 +293,9 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     model_path: str = ""          # 로컬 모델 경로 (local 모드)
     provider: Optional[str] = None  # "local" | "openai" | "anthropic" | "ollama"
     provider_model: Optional[str] = None  # 외부 LLM 모델명 override
@@ -342,6 +359,9 @@ class RagSource(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     response: str
     model_path: str
     tokens_generated: Optional[int] = None
@@ -397,6 +417,9 @@ class StatusResponse(BaseModel):
 
 
 class PipelineRequest(BaseModel):
+    # "model_" is a protected namespace in pydantic v2, but model_id/model_path
+    # are the domain terms here (an ML model). Opt out instead of renaming.
+    model_config = {"protected_namespaces": ()}
     document_id: int
     model_id: str
     training_method: str = Field(default="lora")
