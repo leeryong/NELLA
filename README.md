@@ -27,7 +27,7 @@
 </div>
 
 <div align="center">
-  <img src="assets/nella_chat.png" alt="NELLA 채팅으로 모델 만들기" width="720"/>
+  <img src="assets/NELLA_chat.png" alt="NELLA 채팅으로 모델 만들기" width="720"/>
 </div>
 
 **AI 모델 만드는 법을 몰라도 됩니다.**

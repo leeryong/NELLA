@@ -27,7 +27,7 @@
 </div>
 
 <div align="center">
-  <img src="assets/nella_chat.png" alt="Building a model by chatting with NELLA" width="720"/>
+  <img src="assets/NELLA_chat.png" alt="Building a model by chatting with NELLA" width="720"/>
 </div>
 
 **You don't need to know how AI models are built.**
