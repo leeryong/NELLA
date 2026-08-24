@@ -40,6 +40,13 @@
 **You don't need to know how AI models are built.**
 Data preparation, model selection, hyperparameters — **NELLA takes care of it.** Just approve each step.
 
+NELLA builds **an AI model trained on your own documents**. It is not a cloud service — you install it on your own machine.
+
+- 📄 **Your documents are the raw material** — drop in PDF, Word or HWP files and NELLA writes the training questions and answers, then filters out the weak ones.
+- 💬 **You drive it by chatting** — one sentence in the chat box, and it works through base-model choice, training and scoring in order, asking for approval at each step.
+- 🏠 **It builds on your machine** — the documents and the finished model stay on your PC or your organisation's server. Download the model as a file and share it with colleagues.
+- 📚 **It can look things up instead** — as well as training a model, it answers from your documents with citations (RAG).
+
 <div align="center">
 
 | Who it's for | |
@@ -62,17 +69,21 @@ Data preparation, model selection, hyperparameters — **NELLA takes care of it.
 
 ## 📑 Contents
 
+<div align="center">
+
 | Section | What's inside |
 | --- | --- |
 | [🆕 Latest News](#news) | Windows installer, TAW agent |
-| [🎬 What you can do](#what) | Demo video and screenshots |
-| [🗂️ Ten stages](#pipeline) | From document upload to chat testing |
-| [🚀 Key Features](#features) | What gets automated |
-| [✅ Before you start](#prepare) | API keys, GPU, and other prerequisites |
-| [🛠️ Installation](#install) | Windows installer / Docker |
-| [📞 Contact](#contact) | Get in touch |
+| [🎬 Key screens](#what) | Demo video, agent screenshots |
+| [🗂️ Ten-stage pipeline](#pipeline) | What each stage does |
+| [🚀 Key Features](#features) | Automated steps |
+| [✅ Before you start](#prepare) | API key, GPU, HF token |
+| [🛠️ Installation](#install) | Windows installer, Docker |
+| [📞 Contact](#contact) | Contact details |
 | [👨‍💻 Development Team](#team) | KISTI BLUESKY Team |
-| [📚 Built with](#oss) | Open source we use |
+| [📚 Built with](#oss) | Open source used |
+
+</div>
 
 ---
 
@@ -98,7 +109,7 @@ Data preparation, model selection, hyperparameters — **NELLA takes care of it.
 
 <a id="what"></a>
 
-## 🎬 What you can do
+## 🎬 Key screens
 
 <div align="center">
 
@@ -175,7 +186,7 @@ Data preparation, model selection, hyperparameters — **NELLA takes care of it.
 
 <a id="pipeline"></a>
 
-## 🗂️ Ten stages, start to finish
+## 🗂️ Ten-stage pipeline
 
 From uploading a document to chatting with the finished model, NELLA runs the stages below.
 Work through them **screen by screen**, or hand the whole thing to the agent **in one request**.
