@@ -40,15 +40,11 @@ NELLA builds **an AI model trained on your own documents**. It is not a cloud se
 - 🏠 **It builds on your machine** — the documents and the finished model stay on your PC or your organisation's server. Download the model as a file and share it with colleagues.
 - 📚 **It can look things up instead** — as well as training a model, it answers from your documents with citations (RAG).
 
-<div align="center">
-
 | Who it's for | |
 | --- | --- |
 | 📚 **Researchers** | A dedicated model trained on your papers and experiment notes |
 | 🏛️ **Organizations** | An assistant that knows your internal policies and manuals, built in your own environment |
 | 🎓 **Educators & students** | Course-material study assistants, and hands-on practice with the full LLMOps pipeline |
-
-</div>
 
 <div align="center">
 
@@ -62,8 +58,6 @@ NELLA builds **an AI model trained on your own documents**. It is not a cloud se
 
 ## 📑 Contents
 
-<div align="center">
-
 | Section | What's inside |
 | --- | --- |
 | [🆕 Latest News](#news) | Windows installer, TAW agent |
@@ -75,8 +69,6 @@ NELLA builds **an AI model trained on your own documents**. It is not a cloud se
 | [📞 Contact](#contact) | Contact details |
 | [👨‍💻 Development Team](#team) | KISTI BLUESKY Team |
 | [📚 Built with](#oss) | Open source used |
-
-</div>
 
 ---
 
