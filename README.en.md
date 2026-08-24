@@ -26,16 +26,9 @@
 
 </div>
 
-```
-👤  Build a model from these papers
-
-🤖  Here's the plan. Shall I start?
-      Generate 500 training pairs → validate quality → fine-tune Qwen2.5-1.5B → evaluate
-
-👤  Go ahead
-
-🤖  ✅ Done. Would you like to chat with the model?
-```
+<div align="center">
+  <img src="assets/nella_chat.png" alt="Building a model by chatting with NELLA" width="720"/>
+</div>
 
 **You don't need to know how AI models are built.**
 Data preparation, model selection, hyperparameters — **NELLA takes care of it.** Just approve each step.
